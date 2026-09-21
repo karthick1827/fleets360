@@ -13,7 +13,7 @@ context:
 
 ## Intent
 
-**Proble:** Protected pages had no shared chrome for account actions.
+**Problem:** Protected pages had no shared chrome for account actions.
 
 **Approach:** Render `AppNavbar` inside `AuthenticatedLayout` above `<Outlet />`; guest routes stay outside this layout.
 
