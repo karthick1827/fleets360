@@ -1,0 +1,10 @@
+.placeholder-page {
+  min-height: 100vh;
+  padding: 48px;
+  font-family: var(--fleet-font);
+  color: var(--fleet-on-surface);
+}
+
+.placeholder-page a {
+  color: var(--fleet-primary);
+}

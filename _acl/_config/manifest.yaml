@@ -1,0 +1,23 @@
+installation:
+  version: 6.11.34
+  installDate: 2026-09-16T05:57:34.801Z
+  lastUpdated: 2026-09-21T05:54:40.158Z
+modules:
+  - name: core
+    version: 6.11.34
+    installDate: 2026-09-16T05:57:34.588Z
+    lastUpdated: 2026-09-21T05:54:40.148Z
+    source: built-in
+    npmPackage: null
+    repoUrl: null
+  - name: acl
+    version: 6.11.34
+    installDate: 2026-09-16T05:57:34.227Z
+    lastUpdated: 2026-09-21T05:54:40.158Z
+    source: built-in
+    npmPackage: null
+    repoUrl: null
+ides:
+  - cursor
+  - github-copilot
+  - antigravity-cli

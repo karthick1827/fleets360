@@ -1,0 +1,90 @@
+.profile-settings {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 32px 24px 48px;
+  font-family: var(--fleet-font);
+  color: var(--fleet-on-surface);
+}
+
+.profile-settings h1 {
+  margin: 0 0 24px;
+  font-family: var(--fleet-font-display);
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.profile-settings__card {
+  margin-bottom: 20px;
+  padding: 20px;
+  border: 1px solid var(--fleet-border-subtle);
+  border-radius: var(--fleet-radius-sm);
+  background: var(--fleet-surface);
+}
+
+.profile-settings__card h2 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.profile-settings__dl {
+  margin: 0;
+}
+
+.profile-settings__dl dt {
+  font-size: 12px;
+  color: var(--fleet-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.profile-settings__dl dd {
+  margin: 4px 0 0;
+  font-size: 16px;
+}
+
+.profile-settings__note {
+  margin: 16px 0 0;
+  font-size: 14px;
+  color: var(--fleet-muted);
+}
+
+.profile-settings__theme-current {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: var(--fleet-muted);
+}
+
+.profile-settings__theme-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.profile-settings__theme-btn {
+  padding: 8px 14px;
+  border: 1px solid var(--fleet-border-subtle);
+  border-radius: var(--fleet-radius-sm);
+  background: var(--fleet-surface);
+  color: var(--fleet-on-surface);
+  font-family: var(--fleet-font);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.profile-settings__theme-btn:hover {
+  background: var(--fleet-surface-hover);
+}
+
+.profile-settings__theme-btn--active {
+  border-color: var(--fleet-primary);
+  color: var(--fleet-primary);
+}
+
+.profile-settings__back {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--fleet-navy);
+  text-decoration: underline;
+}
