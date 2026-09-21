@@ -1,8 +1,8 @@
 ---
-status: Approved
+status: In Review
 reviewed_by: Manager (via Markdown Studio)
-review_timestamp: 2026-09-16T09:33:27.900Z
-gate_signature: ACL-STUDIO-APPROVAL-APPROVED
+review_timestamp: 2026-09-21T07:14:56.830Z
+gate_signature: ACL-STUDIO-APPROVAL-IN-REVIEW
 title: Fleet 360
 created: "2026-09-16"
 updated: "2026-09-16"
