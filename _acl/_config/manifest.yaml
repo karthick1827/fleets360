@@ -1,19 +1,19 @@
 installation:
-  version: 6.11.34
+  version: 6.11.35
   installDate: 2026-09-16T05:57:34.801Z
-  lastUpdated: 2026-09-21T05:54:40.158Z
+  lastUpdated: 2026-09-21T08:55:45.954Z
 modules:
   - name: core
-    version: 6.11.34
+    version: 6.11.35
     installDate: 2026-09-16T05:57:34.588Z
-    lastUpdated: 2026-09-21T05:54:40.148Z
+    lastUpdated: 2026-09-21T08:55:45.949Z
     source: built-in
     npmPackage: null
     repoUrl: null
   - name: acl
-    version: 6.11.34
+    version: 6.11.35
     installDate: 2026-09-16T05:57:34.227Z
-    lastUpdated: 2026-09-21T05:54:40.158Z
+    lastUpdated: 2026-09-21T08:55:45.954Z
     source: built-in
     npmPackage: null
     repoUrl: null

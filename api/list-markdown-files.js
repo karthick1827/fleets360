@@ -167,7 +167,7 @@ export default async function handler(req, res) {
 
     // Default repository fallback
     if (!owner) owner = 'karthick1827';
-    if (!repo) repo = 'jira-clone';
+    if (!repo) repo = 'fleets360';
 
     // 1. Fetch from GitHub API if owner and repo are known
     if (owner && repo) {
@@ -246,8 +246,8 @@ export default async function handler(req, res) {
             success: true,
             files: deduplicated,
             activeTier: activeTier,
-            frameworkVersion: '6.11.34',
-            version: '6.11.34',
+            frameworkVersion: '6.11.35',
+            version: '6.11.35',
             source: 'github',
             repo: `${owner}/${repo}`,
             branch: branch,
@@ -320,8 +320,8 @@ export default async function handler(req, res) {
       success: true,
       files: finalDiskList,
       activeTier: diskActiveTier,
-      frameworkVersion: '6.11.34',
-      version: '6.11.34',
+      frameworkVersion: '6.11.35',
+      version: '6.11.35',
       source: 'local-disk',
     };
 
