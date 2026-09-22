@@ -1,8 +1,8 @@
 ---
-status: Approved
+status: In Review
 reviewed_by: Manager (via Markdown Studio)
-review_timestamp: 2026-09-16T06:43:37.634Z
-gate_signature: ACL-STUDIO-APPROVAL-APPROVED
+review_timestamp: 2026-09-22T10:05:21.229Z
+gate_signature: ACL-STUDIO-APPROVAL-IN-REVIEW
 name: Fleet 360
 description: Web login and landing hub — Figma Fleet-360_BK Web canvas (nodes 1228:11322, 227:3884).
 created: "2026-09-16"
