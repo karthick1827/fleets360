@@ -1,8 +1,8 @@
 ---
-status: Approved
+status: In Review
 reviewed_by: Manager (via Markdown Studio)
-review_timestamp: 2026-09-16T09:28:17.717Z
-gate_signature: ACL-STUDIO-APPROVAL-APPROVED
+review_timestamp: 2026-09-23T13:03:26.869Z
+gate_signature: ACL-STUDIO-APPROVAL-IN-REVIEW
 title: "Product Brief: Fleet 360"
 project_type: greenfield
 created: "2026-09-16"
