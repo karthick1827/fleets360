@@ -1,5 +1,6 @@
 [build]
-  publish = "src/public"
+  command = "npm run build"
+  publish = "dist"
   functions = "netlify/functions"
 
 # Route /api/save-markdown directly to Netlify function
@@ -25,11 +26,6 @@
 
 # Markdown Studio web interface rewrites
 [[redirects]]
-  from = "/"
-  to = "/markdown/markdown.html"
-  status = 200
-
-[[redirects]]
   from = "/markdown"
   to = "/markdown/markdown.html"
   status = 200
@@ -37,4 +33,10 @@
 [[redirects]]
   from = "/markdown.html"
   to = "/markdown/markdown.html"
+  status = 200
+
+# React Router SPA fallback for all other application routes
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
   status = 200
