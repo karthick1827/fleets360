@@ -1,8 +1,8 @@
 ---
-status: Approved
+status: In Review
 reviewed_by: Manager (via Markdown Studio)
-review_timestamp: 2026-09-16T09:35:07.807Z
-gate_signature: ACL-STUDIO-APPROVAL-APPROVED
+review_timestamp: 2026-09-24T05:20:59.260Z
+gate_signature: ACL-STUDIO-APPROVAL-IN-REVIEW
 name: Fleet 360
 type: architecture-spine
 purpose: build-substrate

@@ -144,13 +144,34 @@ export default async function handler(req, res) {
 
     let owner = (qOwner || process.env.GITHUB_OWNER || process.env.VERCEL_GIT_REPO_OWNER || '').trim();
     let repo = (qRepo || process.env.GITHUB_REPO || process.env.VERCEL_GIT_REPO_SLUG || '').trim();
-    const branch = (qBranch || process.env.GITHUB_BRANCH || process.env.VERCEL_GIT_COMMIT_REF || 'main').trim();
+    const branch = (
+      qBranch ||
+      process.env.GITHUB_BRANCH ||
+      process.env.VERCEL_GIT_COMMIT_REF ||
+      process.env.BRANCH ||
+      process.env.HEAD ||
+      'main'
+    ).trim();
 
+    // Auto-detect owner and repo from Netlify REPOSITORY_URL or package.json if not explicitly provided
+    if (!owner || !repo) {
+      const netlifyRepoUrl = process.env.REPOSITORY_URL || '';
+      if (netlifyRepoUrl) {
+        const match = netlifyRepoUrl.match(/github\.com[:/]([^/]+)\/([^/.]+)/);
+        if (match) {
+          if (!owner) owner = match[1];
+          if (!repo) repo = match[2].replace(/\.git$/, '');
+        }
+      }
+    }
+
+    let frameworkVersion = '6.11.39';
     if (!owner || !repo) {
       try {
         const pkgPath = path.join(process.cwd(), 'package.json');
         if (fs.existsSync(pkgPath)) {
           const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+          if (pkg.version) frameworkVersion = pkg.version;
           const repoUrl = typeof pkg.repository === 'string' ? pkg.repository : pkg.repository?.url;
           if (repoUrl) {
             const match = repoUrl.match(/github\.com[:/]([^/]+)\/([^/.]+)/);
@@ -167,7 +188,7 @@ export default async function handler(req, res) {
 
     // Default repository fallback
     if (!owner) owner = 'karthick1827';
-    if (!repo) repo = 'fleets360';
+    if (!repo) repo = 'jira-clone';
 
     // 1. Fetch from GitHub API if owner and repo are known
     if (owner && repo) {
@@ -246,8 +267,8 @@ export default async function handler(req, res) {
             success: true,
             files: deduplicated,
             activeTier: activeTier,
-            frameworkVersion: '6.11.35',
-            version: '6.11.35',
+            frameworkVersion: frameworkVersion,
+            version: frameworkVersion,
             source: 'github',
             repo: `${owner}/${repo}`,
             branch: branch,
@@ -320,8 +341,8 @@ export default async function handler(req, res) {
       success: true,
       files: finalDiskList,
       activeTier: diskActiveTier,
-      frameworkVersion: '6.11.35',
-      version: '6.11.35',
+      frameworkVersion: frameworkVersion,
+      version: frameworkVersion,
       source: 'local-disk',
     };
 

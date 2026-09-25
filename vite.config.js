@@ -4,6 +4,31 @@ function aclMarkdownSaverPlugin() {
   return {
     name: 'acl-markdown-saver',
     configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const cleanUrl = req.url ? req.url.split('?')[0] : '';
+        if (
+          cleanUrl === '/markdown.html' ||
+          cleanUrl === '/markdown' ||
+          cleanUrl === '/markdown/' ||
+          cleanUrl === '/markdown/markdown.html'
+        ) {
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const candidatePaths = [
+            path.resolve(process.cwd(), 'public/markdown/markdown.html'),
+            path.resolve(process.cwd(), 'public/markdown.html'),
+          ];
+          for (const mdPath of candidatePaths) {
+            if (fs.existsSync(mdPath)) {
+              res.setHeader('Content-Type', 'text/html; charset=utf-8');
+              res.end(fs.readFileSync(mdPath, 'utf8'));
+              return;
+            }
+          }
+        }
+        next();
+      });
+
       server.middlewares.use('/api/list-markdown-files', (req, res, next) => {
         if (req.method === 'GET') {
           try {
