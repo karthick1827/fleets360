@@ -11,6 +11,64 @@ Open source framework for structured, agent-assisted software delivery.
 - Skill validation rules are in `tools/skill-validator.md`.
 - Deterministic skill checks run via `npm run validate:skills` (included in `quality`).
 
+## 🛑 CRITICAL PRE-FLIGHT CHECK (MANDATORY BEFORE ANY TOOL CALL OR ACTION)
+
+**APPLIES TO ALL AGENTS ACROSS ALL TOOLS (Cursor, GitHub Copilot, Claude Code, Windsurf, AGY, Antigravity, Roo Code, etc.)**:
+
+> ⚠️ **APPLICABILITY SCOPE**:
+> - **Application Projects Managed by ACL-ADLC**: This Pre-Flight Check and Delivery Governance apply strictly to **Application Projects** (target software projects where phase documents and code are delivered into `_acl-output/`).
+> - **Framework Source Code Exemption**: This check does **NOT** apply to internal development, testing, CLI tooling, or maintenance inside the **`ACL-ADLC` framework repository itself** (which is governed by automated tests and `npm run quality`).
+
+### Project Lifecycle Determination: Greenfield vs. Brownfield
+
+1. **GREENFIELD PROJECTS (Day 0 Initial Project / MVP Creation)**:
+   - When building a new project from scratch, the AI Agent **DOES NOT PROMPT FOR A TIER**.
+   - The AI Agent **MUST EXECUTE ALL SEQUENTIAL PHASES IN ORDER**:
+     - **Phase 1**: Product Brief (`brief.md`) -> Manager Sign-Off Gate
+     - **Phase 2**: PRD (`prd.md`) -> Manager Sign-Off Gate
+     - **Phase 3A**: Architecture Spine (`architecture-spine.md`) -> Manager Sign-Off Gate
+     - **Phase 3B**: Epics & Stories (`epics.md`) -> Manager Sign-Off Gate
+     - **Phase 4**: Story Implementation (`story-<num>-<num>.md`) -> Manager Sign-Off Gate -> Code
+   - Direct code generation is strictly forbidden until each phase gate is approved by the Manager in Markdown Studio.
+
+2. **BROWNFIELD PROJECTS (Existing Project / Feature Addition / Tweak / Bugfix)**:
+   - **Default Mode (No "quick dev" tag)**:
+     - When the developer's prompt does **NOT** explicitly tag or mention `quick dev` (or `@acl-quick-dev` / `/acl-quick-dev`):
+       - Do **NOT** prompt for Tier 1 / Tier 2.
+       - Do **NOT** create spec files in `_acl-output/4-implementation/`.
+       - Do **NOT** lock execution or wait for Manager sign-off.
+       - Answer questions, review code, or apply changes directly and normally as requested.
+   - **Governed Mode (Explicit "quick dev" tag)**:
+     - The Brownfield Tier Governance workflow is **STRICTLY OPT-IN**.
+     - Whenever the developer **explicitly tags or mentions `quick dev`** (e.g., `quick dev: <task>`, `@acl-quick-dev <task>`, or `/acl-quick-dev <task>`):
+       - **Case A: Tier is Explicitly Specified in the User Prompt** (e.g., *"quick dev Tier 1: add dark mode"*, *"quick dev Tier 2: database overhaul"*, *"use Tier 1"*):
+         - Follow the rules of that tier immediately.
+       - **Case B: No Tier is Specified in the User Prompt**:
+         - The AI Agent **MUST NOT** write code or edit files.
+         - The AI Agent **MUST IMMEDIATELY OUTPUT** the interactive Tier Selection prompt and **STOP / HALT** to await the user's choice:
+
+```text
+========================================================================
+📊 [FEATURE / CHANGE ASSESSMENT]: Choose Execution Tier
+========================================================================
+🎯 Feature / Change:   <Summary of requested work>
+💡 AI Recommendation:  [Tier 1 / Tier 2 based on blast radius]
+
+Please choose which Tier you want to proceed with:
+
+  [1] Tier 1 — Self-Contained Spec (1-Page Story + Manager Sign-Off)
+      📝 AI generates a 1-page Spec in _acl-output/4-implementation/ (status: In Review).
+      ⏳ Code implementation is strictly LOCKED until Manager approves in Markdown Studio.
+
+  [2] Tier 2 — Major Architectural Overhaul / Full Cascade
+      🏛️ Full sequential governance (Product Brief -> PRD -> Architecture Spine -> Epics).
+
+👉 Reply with 1 or 2 to proceed:
+========================================================================
+```
+
+---
+
 ## 🚦 Phase Gate Approval Invariants (Mandatory & Non-Negotiable)
 
 - **The Closed 3-Value Frontmatter Status Enum Rule (Strict & Non-Negotiable)**:
@@ -31,7 +89,7 @@ Open source framework for structured, agent-assisted software delivery.
   - EVERY single agent (Sally UX Designer, Winston Architect, Amelia Developer, Mary Analyst, etc.) and EVERY skill (`acl-architecture`, `acl-ux`, `acl-create-epics-and-stories`, `acl-quick-dev`, `acl-figma-bridge`, etc.) across ALL AI tools (Cursor, Antigravity, AGY, GitHub Copilot, Claude Code, Windsurf, Roo Code, etc.) MUST FIRST verify that all applicable upstream phase deliverables in `_acl-output/` have `status: Approved`.
   - **Prerequisite Deliverables Scope (What Requires Approval)**:
     - Phase 1: `_acl-output/1-analysis/acl-product-brief/brief.md`
-    - Phase 2: `_acl-output/2-plan-workflows/acl-prd/prd.md`
+    - Phase 2: `_acl-output/2-plan-workflows/acl-prd/prd.md` (and `_acl-output/2-plan-workflows/acl-prd/reconcile-brief.md` if generated against an upstream brief)
     - Phase 3A: `_acl-output/3-solutioning/acl-architecture/architecture-spine.md` (or `architecture.md`)
     - Phase 3B: `_acl-output/3-solutioning/acl-create-epics-and-stories/epics.md`
     - Phase 4: `_acl-output/4-implementation/story-<epic_num>-<story_num>.md` (Tier 2) or `_acl-output/4-implementation/spec-<feature-slug>.md` (Tier 1)
@@ -65,15 +123,17 @@ Open source framework for structured, agent-assisted software delivery.
       ========================================================================
       ```
 
-### 1. Brownfield Change Request Protocol (Interactive Tier Selection)
+### 1. Feature Addition & Change Request Protocol (Brownfield Projects)
 
-> ℹ️ **PROJECT TYPE CHECK**: The AI Agent MUST first check the project type (e.g., from `_acl-output/1-analysis/acl-product-brief/brief.md` or `project-context.md`). If `project_type: greenfield`, execution tiers do NOT apply — immediately follow **Section 3 (Greenfield Feature Addition Protocol)**. Only follow the interactive tier selection below if the project is confirmed Brownfield (`project_type: brownfield`).
+> ℹ️ **PROJECT LIFECYCLE & TIER GOVERNANCE**:
+> - **Brand-New Greenfield Project (Day 0 Initial Creation)**: Always follows the full sequential cascade (Phase 1 Brief -> Phase 2 PRD -> Phase 3A Architecture -> Phase 3B Epics -> Phase 4 Stories). No tier selection is asked because all steps are required.
+> - **Brownfield / Existing Project (Feature Addition or Change)**: Execution tiers (**Tier 1 vs. Tier 2**) **ALWAYS apply**. The AI Agent must prompt the user to choose between Tier 1 (1-Page Spec) and Tier 2 (Major Overhaul) before writing any code.
 
-Whenever the developer asks for a feature, bugfix, or code change in a Brownfield project:
+Whenever the developer asks for a feature, bugfix, or code change in a Brownfield / existing project **and explicitly tags or mentions `quick dev`**:
 
 #### Case A: Tier is Explicitly Specified in the User Prompt
 
-If the user specifies a tier (e.g., _"Tier 1: create notification drawer"_, _"Tier 2: migrate database"_, or _"use Tier 1"_), the AI Agent immediately follows the rules of that tier without asking.
+If the user specifies a tier (e.g., _"quick dev Tier 1: create notification drawer"_, _"quick dev Tier 2: migrate database"_, or _"use Tier 1"_), the AI Agent immediately follows the rules of that tier without asking.
 
 #### Case B: No Tier is Specified in the User Prompt
 
@@ -82,7 +142,7 @@ The AI Agent **MUST FIRST** output the following interactive prompt and **STOP**
 
 ```text
 ========================================================================
-📊 [BROWNFIELD ASSESSMENT]: Choose Execution Tier
+📊 [FEATURE / CHANGE ASSESSMENT]: Choose Execution Tier
 ========================================================================
 🎯 Feature / Change:   <Summary of requested work>
 💡 AI Recommendation:  [Tier 1 / Tier 2 based on blast radius]
@@ -93,7 +153,7 @@ Please choose which Tier you want to proceed with:
       📝 AI generates a 1-page Spec in _acl-output/4-implementation/ (status: In Review).
       ⏳ Code implementation is strictly LOCKED until Manager approves in Markdown Studio.
 
-  [2] Tier 2 — Major Architectural Overhaul
+  [2] Tier 2 — Major Architectural Overhaul / Full Cascade
       🏛️ Full sequential governance (Product Brief -> PRD -> Architecture Spine -> Epics).
 
 👉 Reply with 1 or 2 to proceed:
@@ -104,7 +164,7 @@ Please choose which Tier you want to proceed with:
 
 ### 2. Blast-Radius Tier Rules (2 Tiers: Tier 1 & Tier 2)
 
-> ⚠️ **GOVERNANCE POLICY**: Every change, bugfix, or feature in a Brownfield project requires at minimum a 1-Page Spec with Manager Sign-Off in Markdown Studio (**Tier 1**), or full sequential governance for major architectural overhauls (**Tier 2**). Direct unverified code generation without an approved spec is strictly forbidden.
+> ⚠️ **GOVERNANCE POLICY**: Every change, bugfix, or feature in an existing or completed project requires at minimum a 1-Page Spec with Manager Sign-Off in Markdown Studio (**Tier 1**), or full sequential governance for major architectural overhauls (**Tier 2**). Direct unverified code generation without an approved spec is strictly forbidden.
 
 #### 🟡 Tier 1: Self-Contained Features & Tweaks (1-Page Spec + Manager Approval Gate)
 
@@ -204,18 +264,19 @@ Please choose which Tier you want to proceed with:
 
 ---
 
-### 3. Greenfield Feature Addition Protocol (Sequential Phase-Gate Documentation Sync)
+### 3. Tier 2 Sequential Phase-Gate Workflow (Full Documentation Cascade)
 
-Whenever the developer asks to add a new feature, capability, or change in a completed or existing Greenfield project (`project_type: greenfield`):
+> ℹ️ **SCOPE & APPLICATION**:
+> This 4-phase sequential workflow applies to:
+> 1. **Initial MVP Creation**: Brand-new Greenfield projects being designed and built from scratch (Day 0 to MVP release).
+> 2. **Tier 2 Major Overhauls**: In existing or completed projects (Greenfield or Brownfield) when Tier 2 is selected.
+>
+> ⚠️ **SCOPE TEST BEFORE CODING**:
+> Check `epics.md` — is the requested feature ALREADY an existing approved story in `epics.md`?
+> - If **NO**: You are STRICTLY FORBIDDEN from writing application code! You must follow the selected Tier (Tier 1 spec or Tier 2 sequential pipeline starting with `brief.md`).
+> - If **YES**: Only then are you authorized to implement code for that approved story.
 
-> ⚠️ **GREENFIELD FEATURE GOVERNANCE & SCOPE TEST**:
-> 1. **DO NOT BE FOOLED BY EXISTING `status: Approved` IN `_acl-output/`**: If `brief.md`, `prd.md`, and `epics.md` currently have `status: Approved`, that sign-off belongs EXCLUSIVELY to previously completed features (e.g. initial MVP). It is NOT an authorization to write code for new features!
-> 2. **SCOPE TEST BEFORE CODING**: Check `epics.md` — is the requested feature ALREADY an existing approved story in `epics.md`?
->    - If **NO**: You are STRICTLY FORBIDDEN from writing application code! You MUST re-open Gate 1 by updating `brief.md` with the new feature and setting `status: In Review`.
->    - If **YES**: Only then are you authorized to implement code for that approved story.
-> 3. Execution tiers (Tier 1 / Tier 2) do **NOT** apply to Greenfield projects. Adding any new feature requires strict sequential, one-phase-at-a-time documentation approval.
-
-#### Greenfield Sequential Phase-Gate Workflow:
+#### Sequential Phase-Gate Cascade Workflow:
 
 1. **Phase 1 — Product Brief Update (Gate 1/4)**:
    - The AI Agent **MUST NOT** immediately write or modify application code.

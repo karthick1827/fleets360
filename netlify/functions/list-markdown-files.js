@@ -167,7 +167,7 @@ export async function handler(event) {
       }
     }
 
-    let frameworkVersion = '6.11.39';
+    let frameworkVersion = '6.11.41';
     try {
       const pkgPath = path.join(process.cwd(), 'package.json');
       if (fs.existsSync(pkgPath)) {
@@ -187,7 +187,7 @@ export async function handler(event) {
     }
 
     if (!owner) owner = 'karthick1827';
-    if (!repo) repo = 'fleets360';
+    if (!repo) repo = 'jira-clone';
 
     // 1. Fetch from GitHub API if owner and repo are known
     if (owner && repo) {
