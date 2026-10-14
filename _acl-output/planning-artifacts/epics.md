@@ -122,14 +122,8 @@ So that I can enter credentials confidently and understand legal terms before si
 
 **Acceptance Criteria:**
 
-**Given** I am on `/login` at 1366×768 viewport  
-**When** the page loads  
-**Then** I see Fleet 360 logo, email/password fields with labels, Login button, legal copy, and ACL “Powered by” footer using assets from `src/assets/fleet360/`  
-**And** empty submit shows validation feedback and invalid email format is rejected before submit  
-
-**Given** I focus the form  
-**When** I tab through controls  
-**Then** focus order is email → password → Forgot Password → Login → legal links  
+- [x] **Given** I am on `/login` at 1366×768 viewport **When** the page loads **Then** I see Fleet 360 logo, email/password fields with labels, Login button, legal copy, and ACL “Powered by” footer using assets from `src/assets/fleet360/` **And** empty submit shows validation feedback and invalid email format is rejected before submit
+- [x] **Given** I focus the form **When** I tab through controls **Then** focus order is email → password → Forgot Password → Login → legal links
 
 ### Story 1.2: Forgot password entry (FR-3)
 
@@ -139,10 +133,7 @@ So that I can start recovering access without contacting support.
 
 **Acceptance Criteria:**
 
-**Given** I am on `/login`  
-**When** I activate “Forgot Password?”  
-**Then** I navigate to `/forgot-password`  
-**And** the page explains next steps (email sent or MVP stub message per product decision)  
+- [x] **Given** I am on `/login` **When** I activate “Forgot Password?” **Then** I navigate to `/forgot-password` **And** the page explains next steps (email sent or MVP stub message per product decision)
 
 ### Story 1.3: Authenticate and redirect (FR-2)
 
@@ -152,10 +143,7 @@ So that I can choose where to work next.
 
 **Acceptance Criteria:**
 
-**Given** valid credentials (API or approved dev stub behind feature flag)  
-**When** I submit Login  
-**Then** a Session is established per AD-3 and I am navigated to `/home`  
-**And** invalid credentials show one generic error with no field-specific leak  
+- [x] **Given** valid credentials (API or approved dev stub behind feature flag) **When** I submit Login **Then** a Session is established per AD-3 and I am navigated to `/home` **And** invalid credentials show one generic error with no field-specific leak
 
 ### Story 1.4: Block unauthenticated hub access (FR-2, FR-7, AD-2)
 
@@ -165,13 +153,8 @@ So that operators cannot view the hub without signing in.
 
 **Acceptance Criteria:**
 
-**Given** I have no Session  
-**When** I visit `/home`, `/profile`, `/devices`, `/sites`, or `/users`  
-**Then** I am redirected to `/login`  
-
-**Given** I have a valid Session  
-**When** I refresh `/home`  
-**Then** I remain on Landing and am not sent to Login  
+- [x] **Given** I have no Session **When** I visit `/home`, `/profile`, `/devices`, `/sites`, or `/users` **Then** I am redirected to `/login`
+- [x] **Given** I have a valid Session **When** I refresh `/home` **Then** I remain on Landing and am not sent to Login
 
 ---
 
@@ -187,10 +170,7 @@ So that I understand product value and available areas.
 
 **Acceptance Criteria:**
 
-**Given** I am authenticated on `/home`  
-**When** the page renders  
-**Then** I see color Fleet 360 logo, “Welcome to Fleet 360”, body copy, and three cards (Devices, Sites, Users) with descriptions and pill CTAs per design export  
-**And** hub icons load from `src/assets/fleet360/icon-*.svg`  
+- [x] **Given** I am authenticated on `/home` **When** the page renders **Then** I see color Fleet 360 logo, “Welcome to Fleet 360”, body copy, and three cards (Devices, Sites, Users) with descriptions and pill CTAs per design export **And** hub icons load from `src/assets/fleet360/icon-*.svg`
 
 ### Story 2.2: Hub card navigation (FR-6)
 
@@ -200,10 +180,7 @@ So that I can start work in Devices, Sites, or Users.
 
 **Acceptance Criteria:**
 
-**Given** I am on `/home`  
-**When** I click Manage Devices / Manage Sites / Manage Users  
-**Then** I navigate to `/devices`, `/sites`, or `/users` respectively  
-**And** browser Back returns me to `/home` with Session intact  
+- [x] **Given** I am on `/home` **When** I click Manage Devices / Manage Sites / Manage Users **Then** I navigate to `/devices`, `/sites`, or `/users` respectively **And** browser Back returns me to `/home` with Session intact
 
 ### Story 2.3: Session expiry handling on hub (FR-7)
 
@@ -213,9 +190,7 @@ So that I am not left on a broken hub screen.
 
 **Acceptance Criteria:**
 
-**Given** my Session has expired  
-**When** I load or refresh `/home`  
-**Then** I am redirected to `/login` with an optional message  
+- [x] **Given** my Session has expired **When** I load or refresh `/home` **Then** I am redirected to `/login` with an optional message
 
 ---
 
@@ -231,10 +206,7 @@ So that URLs match the architecture spine and PRD.
 
 **Acceptance Criteria:**
 
-**Given** the app boots  
-**When** I visit `/`  
-**Then** I am redirected to `/login`  
-**And** routes exist for `/login`, `/home`, `/forgot-password`, `/profile`, `/devices`, `/sites`, `/users` as documented in AD-1  
+- [x] **Given** the app boots **When** I visit `/` **Then** I am redirected to `/login` **And** routes exist for `/login`, `/home`, `/forgot-password`, `/profile`, `/devices`, `/sites`, `/users` as documented in AD-1
 
 ### Story 3.2: Auth module and session guard (AD-2, AD-3, AD-4, NFR-3)
 
@@ -244,10 +216,7 @@ So that pages stay presentation-only and tokens are stored safely.
 
 **Acceptance Criteria:**
 
-**Given** `src/auth/` exists with guard helper used by router  
-**When** protected routes render  
-**Then** Login page does not import fetch logic for token storage in localStorage  
-**And** production path documents httpOnly cookie integration point  
+- [x] **Given** `src/auth/` exists with guard helper used by router **When** protected routes render **Then** Login page does not import fetch logic for token storage in localStorage **And** production path documents httpOnly cookie integration point
 
 ### Story 3.3: Domain placeholder shells
 
@@ -257,9 +226,7 @@ So that hub CTAs never dead-end before Phase 2 modules.
 
 **Acceptance Criteria:**
 
-**Given** I am authenticated  
-**When** I open `/devices`, `/sites`, or `/users`  
-**Then** I see a titled shell with one-line description and link back to `/home`  
+- [x] **Given** I am authenticated **When** I open `/devices`, `/sites`, or `/users` **Then** I see a titled shell with one-line description and link back to `/home`  
 
 ---
 
