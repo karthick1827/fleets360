@@ -32,7 +32,7 @@ sources:
 companions: []
 ---
 
-# Architecture Spine — Fleet 360
+# Architecture Spine — Fleets 360
 
 ## Design Paradigm
 
