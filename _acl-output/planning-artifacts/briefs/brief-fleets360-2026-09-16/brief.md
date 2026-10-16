@@ -90,7 +90,7 @@ After sign-in, operators move between `/home`, `/devices`, `/sites`, and `/users
 - Keyboard-accessible menu (open, navigate items, dismiss); focus management for the dropdown.
 - Visual treatment aligned with Fleet 360 tokens (`fleet-tokens.css`) and hub aesthetic.
 
-### Scope (out)
+### Scope (out) 
 
 - Full profile CRUD against a live user API (deferred until backend exists).
 - SSO, MFA, or org-level theme policies.
