@@ -1,4 +1,5 @@
 ---
+jira_key: EW-36
 status: Approved
 title: Profile settings page (Story 4.3)
 type: feature

@@ -1,5 +1,5 @@
 ---
-status: Approved
+status: In Review
 reviewed_by: Manager (via Markdown Studio)
 review_timestamp: 2026-10-06T08:49:24.366Z
 gate_signature: ACL-STUDIO-APPROVAL-APPROVED
@@ -7,6 +7,7 @@ title: "Product Brief: Fleet 360"
 project_type: greenfield
 created: "2026-09-16"
 updated: "2026-09-16"
+confluence_page_id: 2654209
 ---
 
 # Product Brief: Fleet 360
@@ -102,3 +103,6 @@ After sign-in, operators move between `/home`, `/devices`, `/sites`, and `/users
 - Each dropdown item performs its stated action without errors.
 - Sign out returns the user to Login and blocks return to protected routes until re-authentication.
 - Theme change is visible immediately and survives page reload for the same browser profile.
+
+
+## Note from Confluence: Updated operational scope for HVAC telemetry

@@ -1,4 +1,5 @@
 ---
+jira_key: EW-37
 status: Approved
 title: Theme preference (Story 4.4)
 type: feature

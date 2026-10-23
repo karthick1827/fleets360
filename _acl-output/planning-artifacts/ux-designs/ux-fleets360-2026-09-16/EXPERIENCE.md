@@ -9,6 +9,7 @@ updated: "2026-09-16"
 sources:
   - _acl-output/planning-artifacts/prds/prd-fleets360-2026-09-16/prd.md
 design_ref: DESIGN.md
+confluence_page_id: 2719761
 ---
 
 # Fleet 360 — Login & Landing Experience
@@ -46,9 +47,9 @@ design_ref: DESIGN.md
 
 ## Interaction Primitives
 
-- Forgot Password → `/forgot-password`.
-- Hub CTAs → respective module routes.
-- Legal links → placeholder anchors until legal URLs exist.
+- Forgot Password &rarr; `/forgot-password`.
+- Hub CTAs &rarr; respective module routes.
+- Legal links &rarr; placeholder anchors until legal URLs exist.
 
 ## Accessibility Floor
 
@@ -58,9 +59,9 @@ design_ref: DESIGN.md
 
 ## Key Flows
 
-**UJ-1 Marcus signs in** — `/login` → submit → `/home` with three cards visible.
+**UJ-1 Marcus signs in** — `/login` &rarr; submit &rarr; `/home` with three cards visible.
 
-**UJ-3 James orients teammate** — `/home` → read copy → **Manage Users** → `/users` shell.
+**UJ-3 James orients teammate** — `/home` &rarr; read copy &rarr; **Manage Users** &rarr; `/users` shell.
 
 ## Responsive & Platform
 

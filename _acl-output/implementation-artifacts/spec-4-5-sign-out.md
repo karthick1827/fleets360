@@ -1,5 +1,6 @@
 ---
-status: Approved
+jira_key: EW-38
+status: In Review
 title: Sign out (Story 4.5)
 type: feature
 created: 2026-09-16
@@ -52,3 +53,10 @@ context:
 ## Spec Change Log
 
 - 2026-09-16: Story 4.5 implemented and verified
+
+
+## Acceptance Criteria
+
+- [x] `signOut()` exported from auth layer
+- [x] Profile menu sign out clears session and routes to login
+- [x] No confirmation dialog for MVP

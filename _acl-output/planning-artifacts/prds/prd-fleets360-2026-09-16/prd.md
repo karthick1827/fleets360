@@ -13,6 +13,7 @@ design:
   figma_file: FE12zdGPJ4ROng1HfhL55c
   login_node: "1228:11322"
   landing_node: "227:3884"
+confluence_page_id: 2424843
 ---
 
 updated new
@@ -22,7 +23,7 @@ updated new
 
 ## 0. Document Purpose
 
-This PRD is for product, engineering, UX, and QA implementing the **first shippable web slice** of Fleet 360: **Login**, **Landing hub**, and **authenticated app chrome** (navbar with profile menu). It builds on the approved product brief and addendum (Figma Fleet-360_BK, Web canvas). Vocabulary is fixed in §3 Glossary. Functional requirements use global IDs (FR-1…). Assumptions are tagged inline and listed in §9.
+This PRD is for product, engineering, UX, and QA implementing the **first shippable web slice** of Fleet 360: **Login**, **Landing hub**, and **authenticated app chrome** (navbar with profile menu). It builds on the approved product brief and addendum (Figma Fleet-360_BK, Web canvas). Vocabulary is fixed in &sect;3 Glossary. Functional requirements use global IDs (FR-1…). Assumptions are tagged inline and listed in &sect;9.
 
 Downstream UX (`acl-ux`) should treat Figma nodes `1228:11322` (Login) and `227:3884` (Landing) as the visual source of truth for Login/Landing. Navbar and profile menu may extend hub tokens when no dedicated Figma node is named in the brief. Architecture and epics must not expand scope into device cards, dashboards, or telemetry unless this PRD is updated.
 
@@ -55,32 +56,32 @@ Implementation target is a **desktop-first web** experience at **1366×768** (pe
 - **UJ-1. Marcus signs in before his morning walkthrough.**
   - **Persona + context:** Marcus, site operations lead, uses a desktop browser at the facility office.
   - **Entry state:** Unauthenticated; bookmarked Login URL.
-  - **Path:** Opens Login → enters email and password → reads Terms/Privacy notice → taps Login → lands on Landing hub.
+  - **Path:** Opens Login &rarr; enters email and password &rarr; reads Terms/Privacy notice &rarr; taps Login &rarr; lands on Landing hub.
   - **Climax:** Landing shows “Welcome to Fleet 360” and three domain cards; Marcus knows where to go next.
   - **Resolution:** Marcus clicks **Get Started** on Devices (primary funnel) or **Learn More** on Sites/Users.
-  - **Edge case:** Wrong password → inline error, remain on Login, no partial session.
+  - **Edge case:** Wrong password &rarr; inline error, remain on Login, no partial session.
 
 - **UJ-2. Priya returns after a week away.**
   - **Persona + context:** Priya, regional admin, forgot password.
   - **Entry state:** Unauthenticated on Login.
-  - **Path:** Clicks **Forgot Password?** → completes reset flow `[ASSUMPTION: email link or stub screen with success path defined in implementation]`.
+  - **Path:** Clicks **Forgot Password?** &rarr; completes reset flow `[ASSUMPTION: email link or stub screen with success path defined in implementation]`.
   - **Climax:** Can set or confirm new credentials and reach Landing.
   - **Resolution:** Same as UJ-1 on Landing.
 
 - **UJ-3. James orients a new teammate (hub only).**
   - **Persona + context:** James, team lead, already authenticated.
   - **Entry state:** Lands on Landing after login.
-  - **Path:** Reads value proposition copy → scans Devices / Sites / Users cards and CTAs.
+  - **Path:** Reads value proposition copy &rarr; scans Devices / Sites / Users cards and CTAs.
   - **Climax:** James uses **Learn More** on Users to explain access model (“roles per site”).
   - **Resolution:** Navigates to placeholder or future Users module route; MVP may show “coming soon” only if explicitly agreed—default is route stub with brief copy, not dead link.
 
 - **UJ-4. Marcus ends his shift and hands off the workstation.**
   - **Persona + context:** Marcus, site operations lead, shared office desktop.
   - **Entry state:** Authenticated on `/devices` after visiting the hub.
-  - **Path:** Opens profile menu in the app navbar → chooses **Sign out** → confirms redirect to **Login**.
+  - **Path:** Opens profile menu in the app navbar &rarr; chooses **Sign out** &rarr; confirms redirect to **Login**.
   - **Climax:** Protected routes are unreachable until Marcus signs in again.
   - **Resolution:** Next operator sees Login, not Marcus’s session.
-  - **Alternate path:** Marcus opens profile menu → **Theme** toggles light/dark → preference persists after refresh; or **Profile settings** shows signed-in identity (email/display label) with room for future editable fields.
+  - **Alternate path:** Marcus opens profile menu &rarr; **Theme** toggles light/dark &rarr; preference persists after refresh; or **Profile settings** shows signed-in identity (email/display label) with room for future editable fields.
 
 ## 3. Glossary
 
@@ -139,7 +140,7 @@ An **Operator** can open **Forgot Password?** from **Login** and enter a recover
 - Terms and Privacy targets resolve (URL or internal route); broken links fail QA.
 
 **Feature-specific NFRs:**
-- Accessibility: form labels associated with inputs; focus order email → password → actions.
+- Accessibility: form labels associated with inputs; focus order email &rarr; password &rarr; actions.
 - Security: HTTPS in deployed environments; `[ASSUMPTION]` rate limiting on auth API handled server-side.
 
 ### 4.2 Post-login hub (Landing)
@@ -279,13 +280,13 @@ An **Operator** can **Sign out** from the **Profile menu**, ending the **Session
 
 **Primary**
 
-- **SM-1:** ≥95% of successful logins reach **Landing hub** within one navigation step. Validates FR-2.
+- **SM-1:** &ge;95% of successful logins reach **Landing hub** within one navigation step. Validates FR-2.
 - **SM-2:** 100% of QA cases show three domain cards with correct CTA labels. Validates FR-5.
 
 **Secondary**
 
-- **SM-3:** Median time from Login submit to interactive Landing ≤30s on staging. `[ASSUMPTION]` Validates FR-2, FR-5.
-- **SM-4:** Forgot Password path reachable in ≤2 clicks from Login. Validates FR-3.
+- **SM-3:** Median time from Login submit to interactive Landing &le;30s on staging. `[ASSUMPTION]` Validates FR-2, FR-5.
+- **SM-4:** Forgot Password path reachable in &le;2 clicks from Login. Validates FR-3.
 - **SM-5:** 100% of QA authenticated-route cases show navbar with working profile menu. Validates FR-9, FR-10.
 - **SM-6:** Sign out from profile menu blocks protected routes in 100% of QA cases. Validates FR-13.
 
@@ -305,7 +306,7 @@ An **Operator** can **Sign out** from the **Profile menu**, ending the **Session
 
 ## 9. Assumptions Index
 
-- Email/password sufficient for v1; no SSO (§2.2, FR-2).
+- Email/password sufficient for v1; no SSO (&sect;2.2, FR-2).
 - Primary users are facility/fleet operators; HVAC/RTU inferred from later Figma, not Login/Landing copy (brief).
 - Forgot password can be stubbed with clear UX if backend not ready (FR-3).
 - Child domain routes may be shells until Phase 2 (FR-6 note).

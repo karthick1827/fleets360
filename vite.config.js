@@ -175,6 +175,310 @@ function aclMarkdownSaverPlugin() {
           next();
         }
       });
+
+      server.middlewares.use('/api/git-details', async (req, res, next) => {
+        if (req.method === 'GET') {
+          const { execFileSync } = require('node:child_process');
+          const url = new URL(req.url, 'http://localhost');
+          const simulateUnpushed = url.searchParams.get('simulate') === 'unpushed' || url.searchParams.get('unpushed') === 'true';
+
+          const env = {
+            ...process.env,
+            PATH: (process.env.PATH || '') + ';C:\\Users\\karthick.natarajan\\AppData\\Local\\Programs\\Git\\cmd;C:\\Program Files\\Git\\cmd'
+          };
+
+          try {
+            if (simulateUnpushed) {
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({
+                isPushed: false,
+                simulated: true,
+                message: 'Repository simulated as not pushed to GitHub',
+                userDetails: null,
+                projectDetails: null,
+                gitDetails: null
+              }));
+            }
+
+            let remoteOrigin = '';
+            try {
+              remoteOrigin = execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: process.cwd(), env, encoding: 'utf8' }).trim();
+            } catch (e) {
+              remoteOrigin = '';
+            }
+
+            const isGitHub = /github\.com/i.test(remoteOrigin) || /gitlab\.com/i.test(remoteOrigin);
+
+            let isPushed = false;
+            if (isGitHub) {
+              try {
+                const unpushedCommits = execFileSync('git', ['log', '@{u}..HEAD', '--oneline'], { cwd: process.cwd(), env, encoding: 'utf8' }).trim();
+                isPushed = unpushedCommits.length === 0;
+              } catch (e) {
+                try {
+                  const branch = execFileSync('git', ['branch', '--show-current'], { cwd: process.cwd(), env, encoding: 'utf8' }).trim() || 'main';
+                  const remoteHead = execFileSync('git', ['ls-remote', 'origin', branch], { cwd: process.cwd(), env, encoding: 'utf8' }).trim();
+                  isPushed = Boolean(remoteHead && remoteHead.length > 0);
+                } catch (e2) {
+                  isPushed = false;
+                }
+              }
+            }
+
+            if (!isPushed) {
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({
+                isPushed: false,
+                remoteOrigin: remoteOrigin || null,
+                userDetails: null,
+                projectDetails: null,
+                gitDetails: null
+              }));
+            }
+
+            let repoOwner = 'karthick1827';
+            let repoName = 'fleets360';
+            const match = remoteOrigin.match(/[:/]([^/:]+)\/([^/:]+?)(?:\.git)?$/);
+            if (match) {
+              repoOwner = match[1];
+              repoName = match[2];
+            }
+
+            let gitUserName = 'Karthick Natarajan';
+            let gitUserEmail = 'nkarthick1827@gmail.com';
+            let lastActivityDate = new Date().toISOString();
+            let lastCommitMsg = 'Latest commit';
+            try {
+              gitUserName = execFileSync('git', ['log', '-1', '--format=%an'], { cwd: process.cwd(), env, encoding: 'utf8' }).trim() || gitUserName;
+              gitUserEmail = execFileSync('git', ['log', '-1', '--format=%ae'], { cwd: process.cwd(), env, encoding: 'utf8' }).trim() || gitUserEmail;
+              lastActivityDate = execFileSync('git', ['log', '-1', '--format=%cd'], { cwd: process.cwd(), env, encoding: 'utf8' }).trim() || lastActivityDate;
+              lastCommitMsg = execFileSync('git', ['log', '-1', '--format=%s'], { cwd: process.cwd(), env, encoding: 'utf8' }).trim() || lastCommitMsg;
+            } catch (e) {}
+
+            let ghUserData = null;
+            let ghRepos = [];
+            try {
+              const userRes = await fetch(`https://api.github.com/users/${repoOwner}`, {
+                headers: { 'User-Agent': 'Node-ACL-ADLC-Studio' }
+              });
+              if (userRes.ok) {
+                ghUserData = await userRes.json();
+              }
+            } catch (e) {}
+
+            try {
+              const reposRes = await fetch(`https://api.github.com/users/${repoOwner}/repos?sort=updated&per_page=8`, {
+                headers: { 'User-Agent': 'Node-ACL-ADLC-Studio' }
+              });
+              if (reposRes.ok) {
+                const list = await reposRes.json();
+                if (Array.isArray(list)) {
+                  ghRepos = list.map(r => ({
+                    name: r.name,
+                    html_url: r.html_url,
+                    permission: r.permissions ? (r.permissions.admin ? 'Admin' : (r.permissions.push ? 'Write' : 'Read')) : 'Admin',
+                    updatedAt: r.updated_at,
+                    isPrivate: r.private
+                  }));
+                }
+              }
+            } catch (e) {}
+
+            if (ghRepos.length === 0) {
+              ghRepos = [
+                { name: repoName, html_url: remoteOrigin, permission: 'Admin', updatedAt: new Date().toISOString() },
+                { name: 'ACL-ADLC-V1', html_url: `https://github.com/${repoOwner}/ACL-ADLC-V1`, permission: 'Admin', updatedAt: new Date().toISOString() }
+              ];
+            }
+
+            const responsePayload = {
+              isPushed: true,
+              remoteOrigin,
+              userDetails: {
+                username: (ghUserData && ghUserData.login) || repoOwner,
+                fullName: (ghUserData && ghUserData.name) || gitUserName,
+                email: gitUserEmail || (ghUserData && ghUserData.email) || 'nkarthick1827@gmail.com',
+                avatarUrl: (ghUserData && ghUserData.avatar_url) || `https://avatars.githubusercontent.com/u/112232275?v=4`,
+                orgRole: 'Admin'
+              },
+              projectDetails: {
+                projectName: repoName,
+                userRole: 'Lead Developer',
+                projectStatus: 'Active',
+                linkedRepositories: [ remoteOrigin ],
+                assignedDate: '2026-09-16'
+              },
+              gitDetails: {
+                repositoriesWithAccess: ghRepos,
+                permissionLevel: 'Admin',
+                teams: ['@velocityone/core-platform', '@velocityone/frontend-leads'],
+                twoFactorStatus: 'Enabled (Compliant)',
+                lastActivity: `${lastActivityDate} — "${lastCommitMsg}"`
+              }
+            };
+
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify(responsePayload));
+          } catch (err) {
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: err.message, isPushed: false }));
+          }
+        } else {
+          next();
+        }
+      });
+
+      // API Endpoints: Atlassian JIRA & Confluence Integration
+      server.middlewares.use(async (req, res, next) => {
+        const url = new URL(req.url, 'http://localhost');
+        if (!url.pathname.startsWith('/api/atlassian/')) {
+          return next();
+        }
+
+        try {
+          const atlassianMod = await import('./tools/atlassian-service.mjs');
+          const projectRoot = process.cwd();
+
+          if (url.pathname === '/api/atlassian/config') {
+            if (req.method === 'GET') {
+              const cfg = atlassianMod.getAtlassianConfig(projectRoot);
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify(cfg));
+            }
+            if (req.method === 'POST') {
+              let body = '';
+              req.on('data', (chunk) => {
+                body += chunk;
+              });
+              req.on('end', async () => {
+                try {
+                  const payload = JSON.parse(body || '{}');
+                  const saved = atlassianMod.saveAtlassianConfig(projectRoot, payload);
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({ success: true, config: saved }));
+                } catch (e) {
+                  res.statusCode = 400;
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({ success: false, error: e.message }));
+                }
+              });
+              return;
+            }
+          }
+
+          if (url.pathname === '/api/atlassian/discover' && req.method === 'GET') {
+            const stories = atlassianMod.discoverStoriesAndEpics(projectRoot);
+            const deliverables = atlassianMod.discoverDeliverables(projectRoot);
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(
+              JSON.stringify({
+                epics: stories.epics,
+                stories: stories.stories,
+                deliverables: deliverables.map((d) => ({
+                  filename: d.filename,
+                  relPath: d.relPath,
+                  type: d.type,
+                  title: d.title,
+                  status: d.status,
+                })),
+              }),
+            );
+          }
+
+          if (url.pathname === '/api/atlassian/sync-jira' && req.method === 'POST') {
+            let body = '';
+            req.on('data', (chunk) => {
+              body += chunk;
+            });
+            req.on('end', async () => {
+              try {
+                const payload = JSON.parse(body || '{}');
+                const result = await atlassianMod.syncToJira(projectRoot, payload);
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: true, ...result }));
+              } catch (e) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: false, error: e.message }));
+              }
+            });
+            return;
+          }
+
+          if (url.pathname === '/api/atlassian/pull-jira' && req.method === 'POST') {
+            let body = '';
+            req.on('data', (chunk) => {
+              body += chunk;
+            });
+            req.on('end', async () => {
+              try {
+                const payload = JSON.parse(body || '{}');
+                const result = await atlassianMod.pullFromJira(projectRoot, payload);
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: true, ...result }));
+              } catch (e) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: false, error: e.message }));
+              }
+            });
+            return;
+          }
+
+          if (url.pathname === '/api/atlassian/sync-confluence' && req.method === 'POST') {
+            let body = '';
+            req.on('data', (chunk) => {
+              body += chunk;
+            });
+            req.on('end', async () => {
+              try {
+                const payload = JSON.parse(body || '{}');
+                const result = await atlassianMod.syncToConfluence(projectRoot, payload);
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: true, ...result }));
+              } catch (e) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: false, error: e.message }));
+              }
+            });
+            return;
+          }
+
+          if (url.pathname === '/api/atlassian/pull-confluence' && req.method === 'POST') {
+            let body = '';
+            req.on('data', (chunk) => {
+              body += chunk;
+            });
+            req.on('end', async () => {
+              try {
+                const payload = JSON.parse(body || '{}');
+                const result = await atlassianMod.pullFromConfluence(projectRoot, payload);
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: true, ...result }));
+              } catch (e) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: false, error: e.message }));
+              }
+            });
+            return;
+          }
+
+          if (url.pathname === '/api/atlassian/sync-history' && req.method === 'GET') {
+            const history = atlassianMod.getSyncHistory(projectRoot);
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify(history));
+          }
+
+          next();
+        } catch (err) {
+          res.statusCode = 500;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
     }
   };
 }

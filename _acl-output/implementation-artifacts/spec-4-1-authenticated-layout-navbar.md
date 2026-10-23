@@ -1,4 +1,5 @@
 ---
+jira_key: EW-34
 status: Approved
 title: Authenticated layout and app navbar (Story 4.1)
 type: feature

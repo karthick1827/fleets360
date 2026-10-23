@@ -1,8 +1,8 @@
 ---
-status: Approved
+status: In Review
 reviewed_by: Manager (via Markdown Studio)
-review_timestamp: 2026-10-14T05:29:33.889Z
-gate_signature: ACL-STUDIO-APPROVAL-APPROVED
+review_timestamp: 2026-10-22T05:16:54.847Z
+gate_signature: ACL-STUDIO-APPROVAL-IN-REVIEW
 name: Fleet 360
 type: architecture-spine
 purpose: build-substrate
@@ -30,11 +30,12 @@ sources:
   - _acl-output/planning-artifacts/ux-designs/ux-fleets360-2026-09-16/EXPERIENCE.md
   - _acl-output/planning-artifacts/ux-designs/ux-fleets360-2026-09-16/DESIGN.md
 companions: []
+confluence_page_id: 2621441
 ---
 
 # Architecture Spine — Fleets 360
 
-## Design Paradigm
+## Design Paradigms
 
 **Layered single-page application (SPA)** on Vite + React:
 
@@ -139,7 +140,7 @@ flowchart TB
 
 - **Binds:** FR-10, FR-11
 - **Prevents:** Profile actions scattered; modal-only settings with no URL
-- **Rule:** Profile dropdown component lives under `src/components/` (e.g. `ProfileMenu.jsx`). Menu items: **Profile settings** → navigate to `/profile`; **Theme** → cycles or toggles theme via AD-9 (may also offer control on profile page); **Sign out** → AD-11. `/profile` is a protected page (`pages/ProfileSettings.jsx`) showing signed-in email/label from `getSessionIdentity()` in `src/auth/session.js`. No password fields on this page in MVP.
+- **Rule:** Profile dropdown component lives under `src/components/` (e.g. `ProfileMenu.jsx`). Menu items: **Profile settings** &rarr; navigate to `/profile`; **Theme** &rarr; cycles or toggles theme via AD-9 (may also offer control on profile page); **Sign out** &rarr; AD-11. `/profile` is a protected page (`pages/ProfileSettings.jsx`) showing signed-in email/label from `getSessionIdentity()` in `src/auth/session.js`. No password fields on this page in MVP.
 
 ### AD-11 — Sign out
 
@@ -198,13 +199,13 @@ src/
 
 **Deployment (MVP):** static `dist/` from `vite build`; served by CDN or static host. Auth API hosted separately; CORS/cookie domain aligned with AD-3.
 
-## Capability → Architecture Map
+## Capability &rarr; Architecture Map
 
 | Capability / FR | Lives in | Governed by |
 | --- | --- | --- |
 | Login form FR-1, FR-4 | `pages/Login` | AD-5, AD-6 |
 | Authenticate FR-2 | `auth/` + `api/` | AD-2, AD-3, AD-7 |
-| Forgot password FR-3 | `pages/Placeholder` → future `ForgotPassword` | AD-1, AD-4 |
+| Forgot password FR-3 | `pages/Placeholder` &rarr; future `ForgotPassword` | AD-1, AD-4 |
 | Landing hub FR-5–FR-7 | `pages/Landing` | AD-1, AD-2, AD-5 |
 | ACL branding FR-8 | `Login` assets | AD-5 |
 | Devices / Sites / Users entry | `Placeholder` shells | AD-1, AD-4 |

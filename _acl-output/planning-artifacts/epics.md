@@ -21,6 +21,7 @@ inputDocuments:
   - _acl-output/planning-artifacts/briefs/brief-fleets360-2026-09-16/brief.md
 created: "2026-09-16"
 updated: "2026-09-16"
+confluence_page_id: 2686977
 ---
 
 # fleets360 - Epic Breakdown
@@ -50,7 +51,7 @@ FR-13: Sign out clears Session and redirects to Login; protected routes blocked 
 ### NonFunctional Requirements
 
 NFR-1 (SM-1 / security): HTTPS in deployed environments; auth API rate limiting assumed server-side.
-NFR-2 (accessibility): Login labels associated with inputs; focus order email → password → actions; hub icons decorative with adjacent text.
+NFR-2 (accessibility): Login labels associated with inputs; focus order email &rarr; password &rarr; actions; hub icons decorative with adjacent text.
 NFR-3 (AD-3): No passwords or long-lived tokens in localStorage; prefer httpOnly session cookie when API exists.
 NFR-4 (AD-6): Shared design tokens in `fleet-tokens.css`; avoid one-off hex outside tokens.
 NFR-5 (AD-7): Auth failures use uniform `{ code, message }` at client boundary; user-safe Login messaging.
@@ -58,7 +59,7 @@ NFR-6 (chrome a11y): Profile control and menu support keyboard operation (open, 
 
 ### Additional Requirements
 
-- AD-1: Canonical routes `/login`, `/home`, `/profile`, `/devices`, `/sites`, `/users`, `/forgot-password`; `/` → `/login`.
+- AD-1: Canonical routes `/login`, `/home`, `/profile`, `/devices`, `/sites`, `/users`, `/forgot-password`; `/` &rarr; `/login`.
 - AD-2: Session gate on `/home`, `/profile`, and domain routes; redirect to `/login` when missing/expired.
 - AD-8: `AuthenticatedLayout` renders navbar + `<Outlet />`; guest routes exclude chrome.
 - AD-9: Theme key `fleet360.theme` in `localStorage` (`light` | `dark` | `system`).
@@ -67,7 +68,7 @@ NFR-6 (chrome a11y): Profile control and menu support keyboard operation (open, 
 - AD-4: Auth/API logic in `src/auth/` and `src/api/`, not inside page components.
 - AD-5: Visual assets only from `src/assets/fleet360/` per Figma manifest.
 - Stack: React 19, Vite 8, react-router-dom 7.x (ratified in spine).
-- Static deploy: `vite build` → `dist/`; auth API hosted separately when introduced.
+- Static deploy: `vite build` &rarr; `dist/`; auth API hosted separately when introduced.
 
 ### UX Design Requirements
 
@@ -123,7 +124,7 @@ So that I can enter credentials confidently and understand legal terms before si
 **Acceptance Criteria:**
 
 - [x] **Given** I am on `/login` at 1366×768 viewport **When** the page loads **Then** I see Fleet 360 logo, email/password fields with labels, Login button, legal copy, and ACL “Powered by” footer using assets from `src/assets/fleet360/` **And** empty submit shows validation feedback and invalid email format is rejected before submit
-- [x] **Given** I focus the form **When** I tab through controls **Then** focus order is email → password → Forgot Password → Login → legal links
+- [x] **Given** I focus the form **When** I tab through controls **Then** focus order is email &rarr; password &rarr; Forgot Password &rarr; Login &rarr; legal links
 
 ### Story 1.2: Forgot password entry (FR-3)
 

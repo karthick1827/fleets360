@@ -349,5 +349,5 @@ async function universalHandler(arg1, arg2) {
   }
 }
 
-module.exports = universalHandler;
-module.exports.handler = universalHandler;
+export default universalHandler;
+export { universalHandler as handler };

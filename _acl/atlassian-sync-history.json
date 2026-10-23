@@ -1,0 +1,362 @@
+[
+  {
+    "id": "sync-1792576547907",
+    "timestamp": "2026-10-21T09:55:47.907Z",
+    "action": "Confluence Documentation Sync (Push)",
+    "mode": "live-cloud",
+    "totalPages": 7,
+    "spaceKey": "SHOPPINGC",
+    "summary": "Synced 7 deliverables to Confluence space SHOPPINGC (7 updated in-place, 0 created) without duplicates."
+  },
+  {
+    "id": "sync-1792576498954",
+    "timestamp": "2026-10-21T09:54:58.954Z",
+    "action": "Confluence Documentation Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 7,
+    "spaceKey": "SHOPPINGC",
+    "summary": "Pulled 7 deliverables from Confluence (1 changed set to 'In Review', 0 created, 6 unchanged preserved)."
+  },
+  {
+    "id": "sync-1792576430696",
+    "timestamp": "2026-10-21T09:53:50.696Z",
+    "action": "Confluence Documentation Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 7,
+    "spaceKey": "SHOPPINGC",
+    "summary": "Pulled 7 deliverables from Confluence (1 changed set to 'In Review', 0 created, 6 unchanged preserved)."
+  },
+  {
+    "id": "sync-1792576275320",
+    "timestamp": "2026-10-21T09:51:15.320Z",
+    "action": "Confluence Documentation Sync (Push)",
+    "mode": "live-cloud",
+    "totalPages": 7,
+    "spaceKey": "SHOPPINGC",
+    "summary": "Synced 7 deliverables to Confluence space SHOPPINGC (7 updated in-place, 0 created) without duplicates."
+  },
+  {
+    "id": "sync-1792576102812",
+    "timestamp": "2026-10-21T09:48:22.812Z",
+    "action": "Confluence Documentation Sync (Push)",
+    "mode": "live-cloud",
+    "totalPages": 7,
+    "spaceKey": "SHOPPINGC",
+    "summary": "Synced 7 deliverables to Confluence space SHOPPINGC (7 updated in-place, 0 created) without duplicates."
+  },
+  {
+    "id": "sync-1792575362498",
+    "timestamp": "2026-10-21T09:36:02.498Z",
+    "action": "Confluence Documentation Sync (Push)",
+    "mode": "live-cloud",
+    "totalPages": 6,
+    "spaceKey": "SHOPPINGC",
+    "summary": "Synced 6 deliverables to Confluence space SHOPPINGC (6 updated in-place, 0 created) without duplicates."
+  },
+  {
+    "id": "sync-1792574503334",
+    "timestamp": "2026-10-21T09:21:43.334Z",
+    "action": "Confluence Documentation Sync (Push)",
+    "mode": "live-cloud",
+    "totalPages": 6,
+    "spaceKey": "SHOPPINGC",
+    "summary": "Synced 6 deliverables to Confluence space SHOPPINGC (6 updated in-place, 0 created) without duplicates."
+  },
+  {
+    "id": "sync-1792574443129",
+    "timestamp": "2026-10-21T09:20:43.129Z",
+    "action": "Confluence Documentation Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 7,
+    "spaceKey": "SHOPPINGC",
+    "summary": "Pulled 7 deliverables from Confluence (0 changed set to 'In Review', 1 created, 6 unchanged preserved)."
+  },
+  {
+    "id": "sync-1792574320728",
+    "timestamp": "2026-10-21T09:18:40.728Z",
+    "action": "Confluence Documentation Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 6,
+    "spaceKey": "SHOPPINGC",
+    "summary": "Pulled 6 deliverables from Confluence (0 changed set to 'In Review', 0 created, 6 unchanged preserved)."
+  },
+  {
+    "id": "sync-1792574278987",
+    "timestamp": "2026-10-21T09:17:58.988Z",
+    "action": "Confluence Documentation Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 6,
+    "spaceKey": "SHOPPINGC",
+    "summary": "Pulled 6 deliverables from Confluence (0 changed set to 'In Review', 0 created, 6 unchanged preserved)."
+  },
+  {
+    "id": "sync-1792572208755",
+    "timestamp": "2026-10-21T08:43:28.755Z",
+    "action": "Confluence Documentation Sync (Push)",
+    "mode": "live-cloud",
+    "totalPages": 6,
+    "spaceKey": "SHOPPINGC",
+    "summary": "Synced 6 deliverables to Confluence space SHOPPINGC (6 updated in-place, 0 created) without duplicates."
+  },
+  {
+    "id": "sync-1792571994867",
+    "timestamp": "2026-10-21T08:39:54.867Z",
+    "action": "Confluence Documentation Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 6,
+    "spaceKey": "SHOPPINGC",
+    "summary": "Pulled 6 deliverables from Confluence (1 changed set to 'In Review', 0 created, 5 unchanged preserved)."
+  },
+  {
+    "id": "sync-1792571974682",
+    "timestamp": "2026-10-21T08:39:34.682Z",
+    "action": "Confluence Documentation Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 6,
+    "spaceKey": "SHOPPINGC",
+    "summary": "Pulled 6 deliverables from Confluence (0 changed set to 'In Review', 0 created, 6 unchanged preserved)."
+  },
+  {
+    "id": "sync-1792571974173",
+    "timestamp": "2026-10-21T08:39:34.173Z",
+    "action": "Confluence Documentation Sync (Push)",
+    "mode": "live-cloud",
+    "totalPages": 6,
+    "spaceKey": "SHOPPINGC",
+    "summary": "Synced 6 deliverables to Confluence space SHOPPINGC (6 updated in-place, 0 created) without duplicates."
+  },
+  {
+    "id": "sync-1792571907244",
+    "timestamp": "2026-10-21T08:38:27.244Z",
+    "action": "Confluence Documentation Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 6,
+    "spaceKey": "SHOPPINGC",
+    "summary": "Pulled 6 deliverables from Confluence (0 changed set to 'In Review', 0 created, 6 unchanged preserved)."
+  },
+  {
+    "id": "sync-1792571906850",
+    "timestamp": "2026-10-21T08:38:26.850Z",
+    "action": "Confluence Documentation Sync (Push)",
+    "mode": "live-cloud",
+    "totalPages": 6,
+    "spaceKey": "SHOPPINGC",
+    "summary": "Synced 6 deliverables to Confluence space SHOPPINGC (6 updated in-place, 0 created) without duplicates."
+  },
+  {
+    "id": "sync-1792571588338",
+    "timestamp": "2026-10-21T08:33:08.338Z",
+    "action": "Confluence Documentation Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 6,
+    "spaceKey": "SHOPPINGC",
+    "summary": "Pulled 6 deliverables from Confluence (4 changed set to 'In Review', 0 created, 2 unchanged preserved)."
+  },
+  {
+    "id": "sync-1792571494034",
+    "timestamp": "2026-10-21T08:31:34.034Z",
+    "action": "Confluence Documentation Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 6,
+    "spaceKey": "SHOPPINGC",
+    "summary": "Pulled 6 deliverables from Confluence (4 changed set to 'In Review', 0 created, 2 unchanged preserved)."
+  },
+  {
+    "id": "sync-1792571493538",
+    "timestamp": "2026-10-21T08:31:33.538Z",
+    "action": "Confluence Documentation Sync (Push)",
+    "mode": "live-cloud",
+    "totalPages": 6,
+    "spaceKey": "SHOPPINGC",
+    "summary": "Synced 6 deliverables to Confluence space SHOPPINGC (6 updated in-place, 0 created) without duplicates."
+  },
+  {
+    "id": "sync-1792571427114",
+    "timestamp": "2026-10-21T08:30:27.114Z",
+    "action": "Confluence Documentation Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 6,
+    "spaceKey": "SHOPPINGC",
+    "summary": "Pulled 6 deliverables from Confluence (0 changed set to 'In Review', 0 created, 6 unchanged preserved)."
+  },
+  {
+    "id": "sync-1792571426669",
+    "timestamp": "2026-10-21T08:30:26.669Z",
+    "action": "Confluence Documentation Sync (Push)",
+    "mode": "live-cloud",
+    "totalPages": 6,
+    "spaceKey": "SHOPPINGC",
+    "summary": "Synced 6 deliverables to Confluence space SHOPPINGC (6 updated in-place, 0 created) without duplicates."
+  },
+  {
+    "id": "sync-1792571307615",
+    "timestamp": "2026-10-21T08:28:27.615Z",
+    "action": "Confluence Documentation Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 7,
+    "spaceKey": "SHOPPINGC",
+    "summary": "Pulled 7 deliverables from Confluence (6 changed set to 'In Review', 1 created, 0 unchanged preserved)."
+  },
+  {
+    "id": "sync-1792571306812",
+    "timestamp": "2026-10-21T08:28:26.812Z",
+    "action": "Confluence Documentation Sync (Push)",
+    "mode": "live-cloud",
+    "totalPages": 6,
+    "spaceKey": "SHOPPINGC",
+    "summary": "Synced 6 deliverables to Confluence space SHOPPINGC (5 updated in-place, 1 created) without duplicates."
+  },
+  {
+    "id": "sync-1792569906703",
+    "timestamp": "2026-10-21T08:05:06.703Z",
+    "action": "JIRA Epics & Stories Sync (Push)",
+    "mode": "live-cloud",
+    "totalItems": 20,
+    "projectKey": "EW",
+    "summary": "Synced 4 Epics & 16 Stories (20 updated in-place, 0 created) without duplicates."
+  },
+  {
+    "id": "sync-1792569857876",
+    "timestamp": "2026-10-21T08:04:17.876Z",
+    "action": "JIRA Stories Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 16,
+    "projectKey": "EW",
+    "summary": "Pulled 16 stories from JIRA (1 changed set to 'In Review', 0 created, 15 unchanged preserved)."
+  },
+  {
+    "id": "sync-1792569513487",
+    "timestamp": "2026-10-21T07:58:33.487Z",
+    "action": "JIRA Stories Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 16,
+    "projectKey": "EW",
+    "summary": "Pulled 16 stories from JIRA (1 changed set to 'In Review', 0 created, 15 unchanged preserved)."
+  },
+  {
+    "id": "sync-1792569489369",
+    "timestamp": "2026-10-21T07:58:09.369Z",
+    "action": "JIRA Stories Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 16,
+    "projectKey": "EW",
+    "summary": "Pulled 16 stories from JIRA (0 changed set to 'In Review', 0 created, 16 unchanged preserved)."
+  },
+  {
+    "id": "sync-1792569428056",
+    "timestamp": "2026-10-21T07:57:08.056Z",
+    "action": "JIRA Epics & Stories Sync (Push)",
+    "mode": "live-cloud",
+    "totalItems": 20,
+    "projectKey": "EW",
+    "summary": "Synced 4 Epics & 16 Stories (20 updated in-place, 0 created) without duplicates."
+  },
+  {
+    "id": "sync-1792567975596",
+    "timestamp": "2026-10-21T07:32:55.596Z",
+    "action": "JIRA Epics & Stories Sync (Push)",
+    "mode": "live-cloud",
+    "totalItems": 20,
+    "projectKey": "EW",
+    "summary": "Synced 4 Epics & 16 Stories (20 updated in-place, 0 created) without duplicates."
+  },
+  {
+    "id": "sync-1792567852216",
+    "timestamp": "2026-10-21T07:30:52.216Z",
+    "action": "JIRA Epics & Stories Sync (Push)",
+    "mode": "live-cloud",
+    "totalItems": 20,
+    "projectKey": "EW",
+    "summary": "Synced 4 Epics & 16 Stories (20 updated in-place, 0 created) without duplicates."
+  },
+  {
+    "id": "sync-1792567548747",
+    "timestamp": "2026-10-21T07:25:48.747Z",
+    "action": "JIRA Stories Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 16,
+    "projectKey": "EW",
+    "summary": "Pulled 16 stories from JIRA (15 updated to 'In Review', 1 new stories created in _acl-output/)."
+  },
+  {
+    "id": "sync-1792567409679",
+    "timestamp": "2026-10-21T07:23:29.679Z",
+    "action": "JIRA Stories Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 15,
+    "projectKey": "EW",
+    "summary": "Pulled 15 stories from JIRA (15 updated to 'In Review', 0 new stories created in _acl-output/)."
+  },
+  {
+    "id": "sync-1792567195762",
+    "timestamp": "2026-10-21T07:19:55.762Z",
+    "action": "JIRA Stories Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 15,
+    "projectKey": "EW",
+    "summary": "Pulled 15 stories from JIRA (15 updated to 'In Review', 0 new stories created in _acl-output/)."
+  },
+  {
+    "id": "sync-1792567039380",
+    "timestamp": "2026-10-21T07:17:19.380Z",
+    "action": "JIRA Epics & Stories Sync (Push)",
+    "mode": "live-cloud",
+    "totalItems": 19,
+    "projectKey": "EW",
+    "summary": "Synced 4 Epics & 15 Stories (19 updated in-place, 0 created) without duplicates."
+  },
+  {
+    "id": "sync-1792566972577",
+    "timestamp": "2026-10-21T07:16:12.577Z",
+    "action": "Confluence Documentation Sync",
+    "mode": "live-cloud",
+    "totalPages": 6,
+    "spaceKey": "SHOPPINGC",
+    "summary": "Successfully synced 6 primary phase deliverables to Confluence space SHOPPINGC"
+  },
+  {
+    "id": "sync-1792566968551",
+    "timestamp": "2026-10-21T07:16:08.551Z",
+    "action": "JIRA Epics & Stories Sync (Push)",
+    "mode": "live-cloud",
+    "totalItems": 19,
+    "projectKey": "EW",
+    "summary": "Synced 4 Epics & 15 Stories (0 updated in-place, 19 created) without duplicates."
+  },
+  {
+    "id": "sync-1792566872812",
+    "timestamp": "2026-10-21T07:14:32.812Z",
+    "action": "Confluence Documentation Sync",
+    "mode": "live-cloud",
+    "totalPages": 6,
+    "spaceKey": "SHOPPINGC",
+    "summary": "Successfully synced 6 primary phase deliverables to Confluence space SHOPPINGC"
+  },
+  {
+    "id": "sync-1792566868148",
+    "timestamp": "2026-10-21T07:14:28.148Z",
+    "action": "JIRA Epics & Stories Sync (Push)",
+    "mode": "live-cloud",
+    "totalItems": 19,
+    "projectKey": "SC",
+    "summary": "Synced 4 Epics & 15 Stories (19 updated in-place, 0 created) without duplicates."
+  },
+  {
+    "id": "sync-1792566799270",
+    "timestamp": "2026-10-21T07:13:19.270Z",
+    "action": "JIRA Epics & Stories Sync (Push)",
+    "mode": "live-cloud",
+    "totalItems": 19,
+    "projectKey": "SC",
+    "summary": "Synced 4 Epics & 15 Stories (19 updated in-place, 0 created) without duplicates."
+  },
+  {
+    "id": "sync-1792566654463",
+    "timestamp": "2026-10-21T07:10:54.464Z",
+    "action": "JIRA Epics & Stories Sync (Push)",
+    "mode": "live-cloud",
+    "totalItems": 19,
+    "projectKey": "SHOPPINGC",
+    "summary": "Synced 4 Epics & 15 Stories (19 updated in-place, 0 created) without duplicates."
+  }
+]
