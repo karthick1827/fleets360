@@ -1,4 +1,3 @@
 {
-  "domain": "test",
-  "email": "test@example.com"
+  "isDemoMode": true
 }
