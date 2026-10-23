@@ -14,7 +14,7 @@ confluence_page_id: 2654209
 
 ## Executive Summary
 
-Fleet 390 is a web product for people who need a single place to see and control operational assets spread across locations. The Figma Login and Landing screens (Fleet-360_BK, Web canvas) define the first two beats of that experience: a credentialed gate, then a hub that names the work as **Devices**, **Sites**, and **Users**.
+Fleet 360 is a web product for people who need a single place to see and control operational assets spread across locations. The Figma Login and Landing screens (Fleet-360_BK, Web canvas) define the first two beats of that experience: a credentialed gate, then a hub that names the work as **Devices**, **Sites**, and **Users**.
 
 The landing promise is explicit: *complete visibility into your data, total control over your insights*, delivered as secure, real-time analytics. Login is not a marketing page; it is a controlled entry with email/password, password recovery, and legal acceptance, **Powered by ACL Digital**.
 
