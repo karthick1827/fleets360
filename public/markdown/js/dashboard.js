@@ -1766,9 +1766,9 @@ async function renderAtlassianSuite(isPushed) {
 
   try {
     const [cfgResRaw, discResRaw, histResRaw] = await Promise.all([
-      safeFetchJson('/api/atlassian/config'),
-      safeFetchJson('/api/atlassian/discover'),
-      safeFetchJson('/api/atlassian/sync-history'),
+      safeFetchJson('/api/atlassian-config'),
+      safeFetchJson('/api/atlassian-discover'),
+      safeFetchJson('/api/atlassian-sync-history'),
     ]);
 
     let cfgRes = cfgResRaw.ok ? cfgResRaw.data : {};
@@ -1989,7 +1989,7 @@ window.disconnectAtlassian = async function () {
       isDemoMode: false,
       connected: false,
     };
-    await safeFetchJson('/api/atlassian/config', {
+    await safeFetchJson('/api/atlassian-config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(emptyPayload),
@@ -2038,7 +2038,7 @@ window.saveAtlassianConfig = async function (e) {
   }
 
   try {
-    const res = await safeFetchJson('/api/atlassian/config', {
+    const res = await safeFetchJson('/api/atlassian-config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -2057,7 +2057,7 @@ window.saveAtlassianConfig = async function (e) {
       let errMsg = (res.data && res.data.error) || (res.data && res.data.message) || 'Server returned HTTP ' + res.status;
       if (res.status === 404) {
         errMsg =
-          'API route not found (HTTP 404). On Vercel, confirm Root Directory is the repo root (not dist/), redeploy, and check Deployment → Serverless Functions lists /api/atlassian/config.';
+          'API route not found (HTTP 404). On Vercel, confirm Root Directory is the repo root (not dist/), redeploy, and check Deployment → Serverless Functions lists /api/atlassian-config.';
       }
       alert('⚠️ Error saving configuration: ' + errMsg);
       renderAtlassianSuite(true);
@@ -2091,7 +2091,7 @@ window.executeJiraSync = async function () {
   }
 
   try {
-    const res = await safeFetchJson('/api/atlassian/sync-jira', {
+    const res = await safeFetchJson('/api/atlassian-sync-jira', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(atlassianApiPayload()),
@@ -2125,7 +2125,7 @@ window.executeJiraPull = async function () {
   }
 
   try {
-    const res = await safeFetchJson('/api/atlassian/pull-jira', {
+    const res = await safeFetchJson('/api/atlassian-pull-jira', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(atlassianApiPayload()),
@@ -2186,7 +2186,7 @@ window.executeConfluenceSync = async function () {
   }
 
   try {
-    const res = await safeFetchJson('/api/atlassian/sync-confluence', {
+    const res = await safeFetchJson('/api/atlassian-sync-confluence', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(atlassianApiPayload()),
@@ -2224,7 +2224,7 @@ window.executeConfluencePull = async function () {
   }
 
   try {
-    const res = await safeFetchJson('/api/atlassian/pull-confluence', {
+    const res = await safeFetchJson('/api/atlassian-pull-confluence', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(atlassianApiPayload()),

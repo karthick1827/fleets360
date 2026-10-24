@@ -82,7 +82,7 @@ After deploy, open the deployment in the Vercel dashboard → **Deployment Summa
 
 - `/api/health`
 - `/api/git-details`
-- `/api/atlassian/config`
+- `/api/atlassian-config` (legacy `/api/atlassian/config` rewritten in `vercel.json`)
 - `/api/list-markdown-files`
 
 Quick smoke test in the browser (replace with your deployment host):

@@ -821,7 +821,7 @@ function aclMarkdownSaverPlugin() {
       // API Endpoints: Atlassian JIRA & Confluence Integration
       server.middlewares.use(async (req, res, next) => {
         const url = new URL(req.url, 'http://localhost');
-        if (!url.pathname.startsWith('/api/atlassian/')) {
+        if (!url.pathname.startsWith('/api/atlassian-')) {
           return next();
         }
 
@@ -858,7 +858,7 @@ function aclMarkdownSaverPlugin() {
             });
           }
 
-          if (url.pathname === '/api/atlassian/config') {
+          if (url.pathname === '/api/atlassian-config') {
             if (req.method === 'GET') {
               const cfg = atlassianMod.getAtlassianConfig(projectRoot);
               res.setHeader('Content-Type', 'application/json');
@@ -878,7 +878,7 @@ function aclMarkdownSaverPlugin() {
             }
           }
 
-          if (url.pathname === '/api/atlassian/discover' && req.method === 'GET') {
+          if (url.pathname === '/api/atlassian-discover' && req.method === 'GET') {
             const stories = atlassianMod.discoverStoriesAndEpics(projectRoot);
             const deliverables = atlassianMod.discoverDeliverables(projectRoot);
             res.setHeader('Content-Type', 'application/json');
@@ -897,35 +897,35 @@ function aclMarkdownSaverPlugin() {
             );
           }
 
-          if (url.pathname === '/api/atlassian/sync-jira' && req.method === 'POST') {
+          if (url.pathname === '/api/atlassian-sync-jira' && req.method === 'POST') {
             const payload = await readJsonBody();
             const result = await atlassianMod.syncToJira(projectRoot, payload);
             res.setHeader('Content-Type', 'application/json');
             return res.end(JSON.stringify({ success: true, ...result }));
           }
 
-          if (url.pathname === '/api/atlassian/pull-jira' && req.method === 'POST') {
+          if (url.pathname === '/api/atlassian-pull-jira' && req.method === 'POST') {
             const payload = await readJsonBody();
             const result = await atlassianMod.pullFromJira(projectRoot, payload);
             res.setHeader('Content-Type', 'application/json');
             return res.end(JSON.stringify({ success: true, ...result }));
           }
 
-          if (url.pathname === '/api/atlassian/sync-confluence' && req.method === 'POST') {
+          if (url.pathname === '/api/atlassian-sync-confluence' && req.method === 'POST') {
             const payload = await readJsonBody();
             const result = await atlassianMod.syncToConfluence(projectRoot, payload);
             res.setHeader('Content-Type', 'application/json');
             return res.end(JSON.stringify({ success: true, ...result }));
           }
 
-          if (url.pathname === '/api/atlassian/pull-confluence' && req.method === 'POST') {
+          if (url.pathname === '/api/atlassian-pull-confluence' && req.method === 'POST') {
             const payload = await readJsonBody();
             const result = await atlassianMod.pullFromConfluence(projectRoot, payload);
             res.setHeader('Content-Type', 'application/json');
             return res.end(JSON.stringify({ success: true, ...result }));
           }
 
-          if (url.pathname === '/api/atlassian/sync-history' && req.method === 'GET') {
+          if (url.pathname === '/api/atlassian-sync-history' && req.method === 'GET') {
             const history = atlassianMod.getSyncHistory(projectRoot);
             res.setHeader('Content-Type', 'application/json');
             return res.end(JSON.stringify(history));
