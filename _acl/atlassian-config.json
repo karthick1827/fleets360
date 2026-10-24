@@ -1,9 +1,11 @@
 {
-  "domain": "https://acldigital-team-k486deu1.atlassian.net",
+  "domain": "https://acldigital-team-k486deu1.atlassian.net/",
   "email": "karthick.natarajan@acldigital.com",
   "apiToken": "ATATT3xFfGF0mDkHisCix7jpMJRYo0gRXX3OCRwfPLY5TA-LbCN_ZgNvnT6hBTGi0JckIT09oycPcEsFdrQzNDKitg-2GbG1oWRWWOAQVSVINJPniUVDd3nGftClbPggyF-vjijr0ArlR-SD3NN82C2Q6Z1_e1bRRZVd5rrK1t9-XcUk6K7uMyE=31EAD08E",
   "jiraProjectKey": "EW",
-  "confluenceSpaceKey": "FLEETS360",
+  "confluenceSpaceKey": "JIRA",
+  "connected": true,
   "isDemoMode": false,
-  "connected": true
+  "lastSynced": "2026-10-24T13:49:38.498Z",
+  "lastError": null
 }

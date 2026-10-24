@@ -21,7 +21,7 @@ inputDocuments:
   - _acl-output/planning-artifacts/briefs/brief-fleets360-2026-09-16/brief.md
 created: "2026-09-16"
 updated: "2026-09-16"
-confluence_page_id: 2686977
+confluence_page_id: 6356994
 ---
 
 # fleets360 - Epic Breakdown
@@ -303,3 +303,146 @@ So that the next person using this workstation cannot access my session.
 - **NFR / AD coverage:** AD-1–AD-11 addressed via Epics 1–4; SSO and real Devices module deferred per spine.
 - **Dependencies:** Epic 4 builds on Epic 3 (`AuthenticatedLayout`, session guard). Stories 4.1–4.5 implemented in `src/layouts/`, `src/components/`, `src/pages/ProfileSettings.jsx`, `src/theme/`, `src/auth/signOut.js`.
 - **Delivery:** Epics 1–4 acceptance criteria satisfied in repo; re-validate on regression before release.
+
+
+### Story 5.1: Alarm Feed & Incident Triage Visual Shell
+
+h3. User Story
+As a frontend dev,  
+
+I want to build the static visual layout for the Alarm Triage console and incident queue,  
+So that the alarm feed and list rows match Figma frames `Manage Alarms` (`#293:8138`), `Manage Alarms List` (`#293:10463`), and `Devices - Alarms` (`#362:14623`) with 100% pixel-perfect fidelity.
+
+h3. Acceptance Criteria Checklist
+* [X] Alarm Triage surface renders with heading "Alarm & Incident Triage Stream" and severity summary cards (Critical, Major, Minor, Info).
+* [X] Alarm table renders severity-ranked rows with color-coded badges:
+* [X] Each alarm row displays timestamp, device model, serial number link, site/zone location, incident message, and static "Acknowledge" action button.
+* [X] Visual shell complies with strict Zero Dynamic State constraint (static mock incidents with zero active sockets).
+* [X] Production build (`npm run build`) and test suite (`npm test`) pass with zero regressions.
+
+----
+*Source File:* {{story-5-1.md}}
+*Status:* {{In Review}}
+*Synchronized from VelocityONE Markdown Studio*
+
+**Acceptance Criteria:**
+
+- [x] Alarm Triage surface renders with heading "Alarm & Incident Triage Stream" and severity summary cards (Critical, Major, Minor, Info).
+- [x] Alarm table renders severity-ranked rows with color-coded badges:
+- [x] Each alarm row displays timestamp, device model, serial number link, site/zone location, incident message, and static "Acknowledge" action button.
+- [x] Visual shell complies with strict Zero Dynamic State constraint (static mock incidents with zero active sockets).
+- [x] Production build (`npm run build`) and test suite (`npm test`) pass with zero regressions.
+
+
+
+### Story 5.2: Alarm Stream Functional Wiring & Acknowledgment Workflow
+
+h3. User Story
+As a shift operator,  
+I want to receive real-time alarm updates, acknowledge active incidents with resolution notes, and filter by severity,  
+So that equipment anomalies are immediately triaged, assigned, and logged for operational compliance.
+
+h3. Acceptance Criteria Checklist
+* [X] Severity filter tabs (`All`, `Critical`, `Major`, `Minor`, `Info`) dynamically filter the active alarm queue.
+* [X] Clicking "Acknowledge" opens `AcknowledgeModal` allowing resolution notes entry; confirming mutates status to `Acknowledged` with operator attribution.
+* [X] Clicking a device serial number triggers navigation callback (`onInspectDevice`).
+* [X] 5-State Component Matrix fully supported:
+* [X] Default state with active incident queue and severity counters
+* [X] Loading skeleton with shimmer rows
+* [X] Empty state with "All systems operational" shield graphic
+* [X] Error banner with reconnection trigger
+* [X] Overflow handling with line clamping
+* [X] Automated Vitest suite passes covering filtering, acknowledgment, and 5-state matrix.
+* [X] Full regression verification (`npm test` and `npm run build`) passes with zero errors.
+
+----
+*Source File:* {{story-5-2.md}}
+*Status:* {{Approved}}
+*Synchronized from VelocityONE Markdown Studio*
+
+**Acceptance Criteria:**
+
+- [x] Severity filter tabs (`All`, `Critical`, `Major`, `Minor`, `Info`) dynamically filter the active alarm queue.
+- [x] Clicking "Acknowledge" opens `AcknowledgeModal` allowing resolution notes entry; confirming mutates status to `Acknowledged` with operator attribution.
+- [x] Clicking a device serial number triggers navigation callback (`onInspectDevice`).
+- [x] 5-State Component Matrix fully supported:
+- [x] Default state with active incident queue and severity counters
+- [x] Loading skeleton with shimmer rows
+- [x] Empty state with "All systems operational" shield graphic
+- [x] Error banner with reconnection trigger
+- [x] Overflow handling with line clamping
+- [x] Automated Vitest suite passes covering filtering, acknowledgment, and 5-state matrix.
+- [x] Full regression verification (`npm test` and `npm run build`) passes with zero errors.
+
+
+
+### Story 6.1: User Directory & Provisioning Visual Shell
+
+h3. User Story
+As a frontend developer,  
+I want to implement the static visual presentation for the User Directory console,  
+So that the user table, role badges, site association tags, and invite dialog mirror Figma component `Devices - Users` (`#362:14622`) with 100% pixel-perfect fidelity.
+
+h3. Acceptance Criteria Checklist
+* [X] User Directory surface renders with title "Team & Access Governance", search input placeholder, and role filter tabs.
+* [X] User table renders mock operators with initials avatars, names, organizational emails, color-coded role badges (`Admin`, `Site Manager`, `Technician`, `Viewer`), and assigned facility tags.
+* [X] Invite User modal layout displays with input fields (Full Name, Organizational Email, Role, Target Site).
+* [X] Visual shell complies with strict Zero Dynamic State constraint (static visual layout).
+* [X] Production build (`npm run build`) and test suite (`npm test`) pass with zero regressions.
+
+----
+*Source File:* {{story-6-1.md}}
+*Status:* {{Approved}}
+*Synchronized from VelocityONE Markdown Studio*
+
+**Acceptance Criteria:**
+
+- [x] User Directory surface renders with title "Team & Access Governance", search input placeholder, and role filter tabs.
+- [x] User table renders mock operators with initials avatars, names, organizational emails, color-coded role badges (`Admin`, `Site Manager`, `Technician`, `Viewer`), and assigned facility tags.
+- [x] Invite User modal layout displays with input fields (Full Name, Organizational Email, Role, Target Site).
+- [x] Visual shell complies with strict Zero Dynamic State constraint (static visual layout).
+- [x] Production build (`npm run build`) and test suite (`npm test`) pass with zero regressions.
+
+
+
+### Story 6.2: User Administration Functional Wiring & Per-Site RBAC Guard
+
+h3. User Story
+As an IT security administrator,  
+I want to invite new operators, assign site-role permissions, filter directory records, and revoke active sessions,  
+So that facilities and industrial devices are governed strictly under per-site role-based authorization policies (AD-5).
+
+h3. Acceptance Criteria Checklist
+* [X] Search query dynamically filters directory records by name, email, or assigned facility in < 50ms.
+* [X] Role filter tabs (`All`, `Admin`, `Site Manager`, `Technician`, `Viewer`) filter the operator list.
+* [X] Submitting `InviteUserModal` creates an invited operator with assigned site scopes and displays success toast.
+* [X] Revoke button removes operator permissions and invalidates active session.
+* [X] 5-State Component Matrix fully supported:
+* [X] Default state with active operator records
+* [X] Loading skeleton with shimmer rows
+* [X] Empty state with "No operators found" and invite trigger
+* [X] Error banner with retry trigger
+* [X] Overflow handling for multi-site scopes
+* [X] Automated Vitest suite passes covering search, invitation, revocation, and 5-state matrix.
+* [X] Full regression verification (`npm test` and `npm run build`) passes with zero errors.
+
+----
+*Source File:* {{story-6-2.md}}
+*Status:* {{Approved}}
+*Synchronized from VelocityONE Markdown Studio*
+
+**Acceptance Criteria:**
+
+- [x] Search query dynamically filters directory records by name, email, or assigned facility in < 50ms.
+- [x] Role filter tabs (`All`, `Admin`, `Site Manager`, `Technician`, `Viewer`) filter the operator list.
+- [x] Submitting `InviteUserModal` creates an invited operator with assigned site scopes and displays success toast.
+- [x] Revoke button removes operator permissions and invalidates active session.
+- [x] 5-State Component Matrix fully supported:
+- [x] Default state with active operator records
+- [x] Loading skeleton with shimmer rows
+- [x] Empty state with "No operators found" and invite trigger
+- [x] Error banner with retry trigger
+- [x] Overflow handling for multi-site scopes
+- [x] Automated Vitest suite passes covering search, invitation, revocation, and 5-state matrix.
+- [x] Full regression verification (`npm test` and `npm run build`) passes with zero errors.
+

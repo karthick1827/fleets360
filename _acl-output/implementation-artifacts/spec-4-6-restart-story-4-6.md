@@ -5,7 +5,7 @@ type: feature
 created: 2026-10-21
 story_id: 4.6
 epic_id: 4
-jira_key: EW-39
+jira_key: EW-117
 tier: Tier 1 (Self-Contained)
 ---
 

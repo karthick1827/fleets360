@@ -30,7 +30,7 @@ sources:
   - _acl-output/planning-artifacts/ux-designs/ux-fleets360-2026-09-16/EXPERIENCE.md
   - _acl-output/planning-artifacts/ux-designs/ux-fleets360-2026-09-16/DESIGN.md
 companions: []
-confluence_page_id: 2621441
+confluence_page_id: 6422530
 ---
 
 # Architecture Spine — Fleets 360

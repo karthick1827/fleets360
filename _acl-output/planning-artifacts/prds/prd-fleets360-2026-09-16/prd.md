@@ -13,7 +13,7 @@ design:
   figma_file: FE12zdGPJ4ROng1HfhL55c
   login_node: "1228:11322"
   landing_node: "227:3884"
-confluence_page_id: 2424843
+confluence_page_id: 6488065
 ---
 
 updated new

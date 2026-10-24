@@ -239,6 +239,9 @@ async function saveCurrentFile() {
   if (activeAppView === 'dashboard') {
     renderDeliveryDashboard();
   }
+  if (typeof updateGmailButtonState === "function") {
+    updateGmailButtonState();
+  }
   return true;
 }
 

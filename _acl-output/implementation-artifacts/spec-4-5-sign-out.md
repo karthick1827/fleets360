@@ -1,5 +1,5 @@
 ---
-jira_key: EW-38
+jira_key: EW-116
 status: In Review
 title: Sign out (Story 4.5)
 type: feature

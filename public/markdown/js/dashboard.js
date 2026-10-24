@@ -1420,7 +1420,7 @@ function updateNavUserControlCentre(data) {
   const navIcon = document.getElementById('navGitIcon');
   const railIcon = document.getElementById('railGitIcon');
 
-  const ownerName = hasUser ? data.userDetails.fullName || data.userDetails.username : (isConnected ? 'Developer' : 'No Repo Connected');
+  const ownerName = hasUser ? data.userDetails.fullName || data.userDetails.username : isConnected ? 'Developer' : 'No Repo Connected';
   const avatarUrl = hasUser ? data.userDetails.avatarUrl : null;
 
   if (navTitle) {
@@ -1859,8 +1859,8 @@ async function renderAtlassianSuite(isPushed) {
                   <span>Sprint & Issue Management</span>
                 </div>
               </div>
-              <span class="atlassian-status-badge ${isConnected ? 'connected' : (isDemo ? 'demo' : 'standby')}">
-                ${isConnected ? 'Ready to Sync' : (isDemo ? 'Sandbox Ready' : '⚪ Not Configured')}
+              <span class="atlassian-status-badge ${isConnected ? 'connected' : isDemo ? 'demo' : 'standby'}">
+                ${isConnected ? 'Ready to Sync' : isDemo ? 'Sandbox Ready' : '⚪ Not Configured'}
               </span>
             </div>
 
@@ -1891,8 +1891,8 @@ async function renderAtlassianSuite(isPushed) {
                   <span>Living Product & Architecture Pages</span>
                 </div>
               </div>
-              <span class="atlassian-status-badge ${isConnected ? 'connected' : (isDemo ? 'demo' : 'standby')}">
-                ${isConnected ? 'Ready to Sync' : (isDemo ? 'Sandbox Ready' : '⚪ Not Configured')}
+              <span class="atlassian-status-badge ${isConnected ? 'connected' : isDemo ? 'demo' : 'standby'}">
+                ${isConnected ? 'Ready to Sync' : isDemo ? 'Sandbox Ready' : '⚪ Not Configured'}
               </span>
             </div>
 
@@ -2000,7 +2000,9 @@ window.saveAtlassianConfig = async function (e) {
   const isDemoMode = Boolean(document.getElementById('atlDemoMode')?.checked);
 
   if (!isDemoMode && (!domain || !email || !apiToken || !jiraProjectKey || !confluenceSpaceKey)) {
-    alert('⚠️ Please fill in all required fields (Domain, Email, API Token, JIRA Key, Confluence Space Key) or enable Sandbox Simulation Mode.');
+    alert(
+      '⚠️ Please fill in all required fields (Domain, Email, API Token, JIRA Key, Confluence Space Key) or enable Sandbox Simulation Mode.',
+    );
     return;
   }
 
@@ -2028,18 +2030,26 @@ window.saveAtlassianConfig = async function (e) {
       body: JSON.stringify(payload),
     });
 
-    if (res.ok && res.data && (res.data.success || res.data.config)) {
+    if (res.ok && res.data && res.data.success && res.data.config && res.data.config.connected) {
       try {
-        localStorage.setItem('__acl_atlassian_config__', JSON.stringify(payload));
+        localStorage.setItem('__acl_atlassian_config__', JSON.stringify(res.data.config));
       } catch (e) {}
       alert('✅ Atlassian credentials verified and workspace keys saved successfully!');
       renderAtlassianSuite(true);
     } else {
-      const errMsg = (res.data && res.data.error) || (res.data && res.data.message) || ('Server returned HTTP ' + res.status);
+      try {
+        localStorage.removeItem('__acl_atlassian_config__');
+      } catch (e) {}
+      const errMsg = (res.data && res.data.error) || (res.data && res.data.message) || 'Server returned HTTP ' + res.status;
       alert('⚠️ Error saving configuration: ' + errMsg);
+      renderAtlassianSuite(true);
     }
   } catch (err) {
+    try {
+      localStorage.removeItem('__acl_atlassian_config__');
+    } catch (e) {}
     alert('⚠️ Failed to save Atlassian configuration: ' + err.message);
+    renderAtlassianSuite(true);
   } finally {
     if (saveBtn) {
       saveBtn.disabled = false;

@@ -1,7 +1,7 @@
 ---
-jira_key: EW-24
-status: Approved
-reviewed_by: Manager (via Markdown Studio)
+jira_key: EW-102
+status: In Review
+reviewed_by: Pending Manager Review
 review_timestamp: 2026-09-16T07:12:15.284Z
 gate_signature: ACL-STUDIO-APPROVAL-APPROVED
 title: Login screen UI and validation (Story 1.1)
@@ -15,11 +15,12 @@ context:
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
-## Intent
+## Description
 
 **Problem:** Operators need an authenticated entry point matching Figma visual identity with responsive desktop layout and client-side form validation.
 
 **Approach:** Implement `/login` page with Figma-exported assets, HTML5 and accessible input validation, password masking, legal acceptance, and ACL Digital branding.
+
 
 ## Boundaries & Constraints
 
@@ -49,6 +50,7 @@ context:
 - [x] Given I am on `/login` at 1366×768 viewport, when the page loads, then I see Fleet 360 logo, email/password fields with labels, Login button, legal copy, and ACL "Powered by" footer
 - [x] Given I focus the form, when I tab through controls, then focus order is email → password → Forgot Password → Login → legal links
 - [x] Given invalid or empty inputs, when submitting, then browser validation stops submission and shows actionable feedback
+
 
 ## Verification
 

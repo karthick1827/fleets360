@@ -1,6 +1,6 @@
 ---
-jira_key: EW-37
-status: Approved
+jira_key: EW-115
+status: In Review
 title: Theme preference (Story 4.4)
 type: feature
 created: 2026-09-16
@@ -8,15 +8,17 @@ story_key: 4-4-theme-preference
 baseline_commit: NO_VCS
 context:
   - ../../../_acl-output/planning-artifacts/epics.md
+reviewed_by: Pending Manager Review
 ---
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
-## Intent
+## Description
 
 **Problem:** No user-controlled light/dark preference across authenticated pages.
 
 **Approach:** `src/theme/theme.js` persists `fleet360.theme` (`light` | `dark` | `system`); apply via `data-theme` on `documentElement`.
+
 
 ## Boundaries & Constraints
 
@@ -55,3 +57,11 @@ context:
 ## Spec Change Log
 
 - 2026-09-16: Story 4.4 implemented and verified
+
+
+## Acceptance Criteria
+
+- [x] Theme module with `fleet390.theme` key
+- [x] Dark token overrides in CSS
+- [x] Menu cycle + profile page buttons
+- [x] Boot-time apply in `main.jsx`

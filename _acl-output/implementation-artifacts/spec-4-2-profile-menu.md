@@ -1,5 +1,5 @@
 ---
-jira_key: EW-35
+jira_key: EW-113
 status: Approved
 title: Profile menu UI and accessibility (Story 4.2)
 type: feature

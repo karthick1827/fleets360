@@ -1,5 +1,167 @@
 [
   {
+    "id": "sync-1792850106121",
+    "timestamp": "2026-10-24T13:55:06.121Z",
+    "action": "JIRA Stories Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 16,
+    "projectKey": "EW",
+    "summary": "Pulled 16 stories from JIRA (2 changed set to 'In Review', 0 created, 14 unchanged preserved)."
+  },
+  {
+    "id": "sync-1792850097620",
+    "timestamp": "2026-10-24T13:54:57.620Z",
+    "action": "Confluence Documentation Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 6,
+    "spaceKey": "JIRA",
+    "summary": "Pulled 6 deliverables from Confluence (0 changed set to 'In Review', 0 created, 6 unchanged preserved)."
+  },
+  {
+    "id": "sync-1792849847832",
+    "timestamp": "2026-10-24T13:50:47.832Z",
+    "action": "JIRA Stories Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 16,
+    "projectKey": "EW",
+    "summary": "Pulled 16 stories from JIRA (1 changed set to 'In Review', 0 created, 15 unchanged preserved)."
+  },
+  {
+    "id": "sync-1792849810014",
+    "timestamp": "2026-10-24T13:50:10.014Z",
+    "action": "JIRA Stories Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 16,
+    "projectKey": "EW",
+    "summary": "Pulled 16 stories from JIRA (0 changed set to 'In Review', 0 created, 16 unchanged preserved)."
+  },
+  {
+    "id": "sync-1792849778497",
+    "timestamp": "2026-10-24T13:49:38.497Z",
+    "action": "JIRA Epics & Stories Sync (Push)",
+    "mode": "live-cloud",
+    "totalItems": 20,
+    "projectKey": "EW",
+    "summary": "Synced 4 Epics & 16 Stories (20 updated in-place, 0 created) without duplicates."
+  },
+  {
+    "id": "sync-1792849747557",
+    "timestamp": "2026-10-24T13:49:07.557Z",
+    "action": "JIRA Epics & Stories Sync (Push)",
+    "mode": "live-cloud",
+    "totalItems": 20,
+    "projectKey": "EW",
+    "summary": "Synced 4 Epics & 16 Stories (0 updated in-place, 20 created) without duplicates."
+  },
+  {
+    "id": "sync-1792849519173",
+    "timestamp": "2026-10-24T13:45:19.173Z",
+    "action": "JIRA Epics & Stories Sync (Push)",
+    "mode": "live-cloud",
+    "totalItems": 20,
+    "projectKey": "EW",
+    "summary": "Synced 4 Epics & 16 Stories (0 updated in-place, 0 created) without duplicates."
+  },
+  {
+    "id": "sync-1792849336446",
+    "timestamp": "2026-10-24T13:42:16.446Z",
+    "action": "JIRA Stories Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 0,
+    "projectKey": "EW",
+    "summary": "Pulled 0 stories from JIRA (0 changed set to 'In Review', 0 created, 0 unchanged preserved)."
+  },
+  {
+    "id": "sync-1792849317795",
+    "timestamp": "2026-10-24T13:41:57.795Z",
+    "action": "JIRA Epics & Stories Sync (Push)",
+    "mode": "live-cloud",
+    "totalItems": 20,
+    "projectKey": "EW",
+    "summary": "Synced 4 Epics & 16 Stories (0 updated in-place, 0 created) without duplicates."
+  },
+  {
+    "id": "sync-1792849059297",
+    "timestamp": "2026-10-24T13:37:39.297Z",
+    "action": "JIRA Epics & Stories Sync (Push)",
+    "mode": "live-cloud",
+    "totalItems": 20,
+    "projectKey": "EW",
+    "summary": "Synced 4 Epics & 16 Stories (0 updated in-place, 0 created) without duplicates."
+  },
+  {
+    "id": "sync-1792849008057",
+    "timestamp": "2026-10-24T13:36:48.057Z",
+    "action": "JIRA Epics & Stories Sync (Push)",
+    "mode": "live-cloud",
+    "totalItems": 20,
+    "projectKey": "EW",
+    "summary": "Synced 4 Epics & 16 Stories (0 updated in-place, 0 created) without duplicates."
+  },
+  {
+    "id": "sync-1792848942334",
+    "timestamp": "2026-10-24T13:35:42.334Z",
+    "action": "Confluence Documentation Sync (Push)",
+    "mode": "live-cloud",
+    "totalPages": 7,
+    "spaceKey": "JIRA",
+    "summary": "Synced 7 deliverables to Confluence space JIRA (7 updated in-place, 0 created) without duplicates."
+  },
+  {
+    "id": "sync-1792848887779",
+    "timestamp": "2026-10-24T13:34:47.779Z",
+    "action": "Confluence Documentation Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 6,
+    "spaceKey": "JIRA",
+    "summary": "Pulled 6 deliverables from Confluence (1 changed set to 'In Review', 1 created, 4 unchanged preserved)."
+  },
+  {
+    "id": "sync-1792848808260",
+    "timestamp": "2026-10-24T13:33:28.260Z",
+    "action": "Confluence Documentation Sync (Push)",
+    "mode": "live-cloud",
+    "totalPages": 6,
+    "spaceKey": "JIRA",
+    "summary": "Synced 6 deliverables to Confluence space JIRA (1 updated in-place, 5 created) without duplicates."
+  },
+  {
+    "id": "sync-1792848678581",
+    "timestamp": "2026-10-24T13:31:18.581Z",
+    "action": "Confluence Documentation Sync (Push)",
+    "mode": "simulated-demo",
+    "totalPages": 6,
+    "spaceKey": "FLEET",
+    "summary": "Synced 6 deliverables to Confluence space FLEET (6 updated in-place, 0 created) without duplicates."
+  },
+  {
+    "id": "sync-1792832981766",
+    "timestamp": "2026-10-24T09:09:41.766Z",
+    "action": "JIRA Stories Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 29,
+    "projectKey": "EW",
+    "summary": "Pulled 29 stories from JIRA (24 changed set to 'In Review', 4 created, 1 unchanged preserved)."
+  },
+  {
+    "id": "sync-1792831712943",
+    "timestamp": "2026-10-24T08:48:32.943Z",
+    "action": "JIRA Stories Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 29,
+    "projectKey": "EW",
+    "summary": "Pulled 29 stories from JIRA (25 changed set to 'In Review', 4 created, 0 unchanged preserved)."
+  },
+  {
+    "id": "sync-1792831626999",
+    "timestamp": "2026-10-24T08:47:06.999Z",
+    "action": "JIRA Epics & Stories Sync (Push)",
+    "mode": "live-cloud",
+    "totalItems": 20,
+    "projectKey": "EW",
+    "summary": "Synced 4 Epics & 16 Stories (0 updated in-place, 20 created) without duplicates."
+  },
+  {
     "id": "sync-1792743345651",
     "timestamp": "2026-10-23T08:15:45.651Z",
     "action": "JIRA Stories Pull (Fetch)",
@@ -196,167 +358,5 @@
     "totalPages": 6,
     "spaceKey": "SHOPPINGC",
     "summary": "Synced 6 deliverables to Confluence space SHOPPINGC (6 updated in-place, 0 created) without duplicates."
-  },
-  {
-    "id": "sync-1792571307615",
-    "timestamp": "2026-10-21T08:28:27.615Z",
-    "action": "Confluence Documentation Pull (Fetch)",
-    "mode": "live-cloud",
-    "totalItems": 7,
-    "spaceKey": "SHOPPINGC",
-    "summary": "Pulled 7 deliverables from Confluence (6 changed set to 'In Review', 1 created, 0 unchanged preserved)."
-  },
-  {
-    "id": "sync-1792571306812",
-    "timestamp": "2026-10-21T08:28:26.812Z",
-    "action": "Confluence Documentation Sync (Push)",
-    "mode": "live-cloud",
-    "totalPages": 6,
-    "spaceKey": "SHOPPINGC",
-    "summary": "Synced 6 deliverables to Confluence space SHOPPINGC (5 updated in-place, 1 created) without duplicates."
-  },
-  {
-    "id": "sync-1792569906703",
-    "timestamp": "2026-10-21T08:05:06.703Z",
-    "action": "JIRA Epics & Stories Sync (Push)",
-    "mode": "live-cloud",
-    "totalItems": 20,
-    "projectKey": "EW",
-    "summary": "Synced 4 Epics & 16 Stories (20 updated in-place, 0 created) without duplicates."
-  },
-  {
-    "id": "sync-1792569857876",
-    "timestamp": "2026-10-21T08:04:17.876Z",
-    "action": "JIRA Stories Pull (Fetch)",
-    "mode": "live-cloud",
-    "totalItems": 16,
-    "projectKey": "EW",
-    "summary": "Pulled 16 stories from JIRA (1 changed set to 'In Review', 0 created, 15 unchanged preserved)."
-  },
-  {
-    "id": "sync-1792569513487",
-    "timestamp": "2026-10-21T07:58:33.487Z",
-    "action": "JIRA Stories Pull (Fetch)",
-    "mode": "live-cloud",
-    "totalItems": 16,
-    "projectKey": "EW",
-    "summary": "Pulled 16 stories from JIRA (1 changed set to 'In Review', 0 created, 15 unchanged preserved)."
-  },
-  {
-    "id": "sync-1792569489369",
-    "timestamp": "2026-10-21T07:58:09.369Z",
-    "action": "JIRA Stories Pull (Fetch)",
-    "mode": "live-cloud",
-    "totalItems": 16,
-    "projectKey": "EW",
-    "summary": "Pulled 16 stories from JIRA (0 changed set to 'In Review', 0 created, 16 unchanged preserved)."
-  },
-  {
-    "id": "sync-1792569428056",
-    "timestamp": "2026-10-21T07:57:08.056Z",
-    "action": "JIRA Epics & Stories Sync (Push)",
-    "mode": "live-cloud",
-    "totalItems": 20,
-    "projectKey": "EW",
-    "summary": "Synced 4 Epics & 16 Stories (20 updated in-place, 0 created) without duplicates."
-  },
-  {
-    "id": "sync-1792567975596",
-    "timestamp": "2026-10-21T07:32:55.596Z",
-    "action": "JIRA Epics & Stories Sync (Push)",
-    "mode": "live-cloud",
-    "totalItems": 20,
-    "projectKey": "EW",
-    "summary": "Synced 4 Epics & 16 Stories (20 updated in-place, 0 created) without duplicates."
-  },
-  {
-    "id": "sync-1792567852216",
-    "timestamp": "2026-10-21T07:30:52.216Z",
-    "action": "JIRA Epics & Stories Sync (Push)",
-    "mode": "live-cloud",
-    "totalItems": 20,
-    "projectKey": "EW",
-    "summary": "Synced 4 Epics & 16 Stories (20 updated in-place, 0 created) without duplicates."
-  },
-  {
-    "id": "sync-1792567548747",
-    "timestamp": "2026-10-21T07:25:48.747Z",
-    "action": "JIRA Stories Pull (Fetch)",
-    "mode": "live-cloud",
-    "totalItems": 16,
-    "projectKey": "EW",
-    "summary": "Pulled 16 stories from JIRA (15 updated to 'In Review', 1 new stories created in _acl-output/)."
-  },
-  {
-    "id": "sync-1792567409679",
-    "timestamp": "2026-10-21T07:23:29.679Z",
-    "action": "JIRA Stories Pull (Fetch)",
-    "mode": "live-cloud",
-    "totalItems": 15,
-    "projectKey": "EW",
-    "summary": "Pulled 15 stories from JIRA (15 updated to 'In Review', 0 new stories created in _acl-output/)."
-  },
-  {
-    "id": "sync-1792567195762",
-    "timestamp": "2026-10-21T07:19:55.762Z",
-    "action": "JIRA Stories Pull (Fetch)",
-    "mode": "live-cloud",
-    "totalItems": 15,
-    "projectKey": "EW",
-    "summary": "Pulled 15 stories from JIRA (15 updated to 'In Review', 0 new stories created in _acl-output/)."
-  },
-  {
-    "id": "sync-1792567039380",
-    "timestamp": "2026-10-21T07:17:19.380Z",
-    "action": "JIRA Epics & Stories Sync (Push)",
-    "mode": "live-cloud",
-    "totalItems": 19,
-    "projectKey": "EW",
-    "summary": "Synced 4 Epics & 15 Stories (19 updated in-place, 0 created) without duplicates."
-  },
-  {
-    "id": "sync-1792566972577",
-    "timestamp": "2026-10-21T07:16:12.577Z",
-    "action": "Confluence Documentation Sync",
-    "mode": "live-cloud",
-    "totalPages": 6,
-    "spaceKey": "SHOPPINGC",
-    "summary": "Successfully synced 6 primary phase deliverables to Confluence space SHOPPINGC"
-  },
-  {
-    "id": "sync-1792566968551",
-    "timestamp": "2026-10-21T07:16:08.551Z",
-    "action": "JIRA Epics & Stories Sync (Push)",
-    "mode": "live-cloud",
-    "totalItems": 19,
-    "projectKey": "EW",
-    "summary": "Synced 4 Epics & 15 Stories (0 updated in-place, 19 created) without duplicates."
-  },
-  {
-    "id": "sync-1792566872812",
-    "timestamp": "2026-10-21T07:14:32.812Z",
-    "action": "Confluence Documentation Sync",
-    "mode": "live-cloud",
-    "totalPages": 6,
-    "spaceKey": "SHOPPINGC",
-    "summary": "Successfully synced 6 primary phase deliverables to Confluence space SHOPPINGC"
-  },
-  {
-    "id": "sync-1792566868148",
-    "timestamp": "2026-10-21T07:14:28.148Z",
-    "action": "JIRA Epics & Stories Sync (Push)",
-    "mode": "live-cloud",
-    "totalItems": 19,
-    "projectKey": "SC",
-    "summary": "Synced 4 Epics & 15 Stories (19 updated in-place, 0 created) without duplicates."
-  },
-  {
-    "id": "sync-1792566799270",
-    "timestamp": "2026-10-21T07:13:19.270Z",
-    "action": "JIRA Epics & Stories Sync (Push)",
-    "mode": "live-cloud",
-    "totalItems": 19,
-    "projectKey": "SC",
-    "summary": "Synced 4 Epics & 15 Stories (19 updated in-place, 0 created) without duplicates."
   }
 ]

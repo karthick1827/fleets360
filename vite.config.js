@@ -796,6 +796,28 @@ function aclMarkdownSaverPlugin() {
         }
       });
 
+      // API Endpoint: /api/send-email (Team Organization & Status Notification System)
+      server.middlewares.use('/api/send-email', async (req, res, next) => {
+        try {
+          const { fs, path, pathToFileURL, projectRoot } = await getUtils();
+          const emailHandlerPath = path.join(projectRoot, 'api', 'send-email.js');
+          if (fs.existsSync(emailHandlerPath)) {
+            const emailMod = await import(pathToFileURL(emailHandlerPath).href + '?t=' + Date.now());
+            const handler = emailMod.default || emailMod.handler;
+            if (typeof handler === 'function') {
+              return await handler(req, res);
+            }
+          }
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: 'Email endpoint not found' }));
+        } catch (err) {
+          if (!res.headersSent) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+          }
+          res.end(JSON.stringify({ success: false, error: err.message }));
+        }
+      });
+
       // API Endpoints: Atlassian JIRA & Confluence Integration
       server.middlewares.use(async (req, res, next) => {
         const url = new URL(req.url, 'http://localhost');
