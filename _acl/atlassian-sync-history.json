@@ -1,5 +1,14 @@
 [
   {
+    "id": "sync-1792743345651",
+    "timestamp": "2026-10-23T08:15:45.651Z",
+    "action": "JIRA Stories Pull (Fetch)",
+    "mode": "live-cloud",
+    "totalItems": 0,
+    "projectKey": "E",
+    "summary": "Pulled 0 stories from JIRA (0 changed set to 'In Review', 0 created, 0 unchanged preserved)."
+  },
+  {
     "id": "sync-1792576547907",
     "timestamp": "2026-10-21T09:55:47.907Z",
     "action": "Confluence Documentation Sync (Push)",
@@ -348,15 +357,6 @@
     "mode": "live-cloud",
     "totalItems": 19,
     "projectKey": "SC",
-    "summary": "Synced 4 Epics & 15 Stories (19 updated in-place, 0 created) without duplicates."
-  },
-  {
-    "id": "sync-1792566654463",
-    "timestamp": "2026-10-21T07:10:54.464Z",
-    "action": "JIRA Epics & Stories Sync (Push)",
-    "mode": "live-cloud",
-    "totalItems": 19,
-    "projectKey": "SHOPPINGC",
     "summary": "Synced 4 Epics & 15 Stories (19 updated in-place, 0 created) without duplicates."
   }
 ]

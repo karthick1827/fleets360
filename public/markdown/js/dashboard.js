@@ -1414,18 +1414,13 @@ function renderDeveloperDashboard() {
 // User Control Centre (Git Identity & Permissions Dashboard)
 // ===================================================
 function updateNavUserControlCentre(data) {
-  const isConnected = Boolean(
-    data &&
-    (data.repoConnected === true ||
-      (data.repoConnected !== false &&
-        (data.isPushed || (data.userDetails && Boolean(data.userDetails.username || data.userDetails.fullName))))),
-  );
+  const isConnected = Boolean(data && data.repoConnected === true && !data.repoDeleted);
   const hasUser = Boolean(isConnected && data.userDetails && (data.userDetails.fullName || data.userDetails.username));
   const navTitle = document.getElementById('navGitTitle');
   const navIcon = document.getElementById('navGitIcon');
   const railIcon = document.getElementById('railGitIcon');
 
-  const ownerName = hasUser ? data.userDetails.fullName || data.userDetails.username : 'Guest';
+  const ownerName = hasUser ? data.userDetails.fullName || data.userDetails.username : (isConnected ? 'Developer' : 'No Repo Connected');
   const avatarUrl = hasUser ? data.userDetails.avatarUrl : null;
 
   if (navTitle) {
@@ -1461,7 +1456,7 @@ async function renderGitDashboard() {
   try {
     let data = null;
     try {
-      const res = await fetch('/api/git-details');
+      const res = await fetch('/api/git-details?t=' + Date.now());
       if (res.ok) {
         data = await res.json();
       }
@@ -1471,12 +1466,8 @@ async function renderGitDashboard() {
     if (!data) {
       data = { isPushed: false, repoConnected: false, userDetails: {}, projectDetails: {}, gitDetails: {} };
     }
-    const isConnected = Boolean(
-      data &&
-      (data.repoConnected === true ||
-        (data.repoConnected !== false &&
-          (data.isPushed || (data.userDetails && Boolean(data.userDetails.username || data.userDetails.fullName))))),
-    );
+    const isConnected = Boolean(data && data.repoConnected === true && !data.repoDeleted);
+    window.__ACL_GIT_CONNECTED__ = isConnected;
     const isPushed = Boolean(data && data.isPushed);
 
     // Update navbar identity
@@ -1788,7 +1779,7 @@ async function renderAtlassianSuite(isPushed) {
     } else if (isDemo) {
       statusBadgeHtml = `<span class="atlassian-status-badge demo">🟡 Interactive Sandbox Mode</span>`;
     } else {
-      statusBadgeHtml = `<span class="atlassian-status-badge standby">⚪ Standby (Offline)</span>`;
+      statusBadgeHtml = `<span class="atlassian-status-badge standby">⚪ Not Configured</span>`;
     }
 
     mount.innerHTML = `
@@ -1847,6 +1838,7 @@ async function renderAtlassianSuite(isPushed) {
                 <label for="atlDemoMode" style="cursor: pointer; font-size: 0.82rem; text-transform: none; color: #475569;">Use Sandbox Simulation Mode (generates live-preview keys without requiring active API token)</label>
               </div>
               <div style="display: flex; gap: 0.5rem;">
+                ${isConnected || isDemo ? '<button type="button" class="atlassian-toggle-btn" onclick="disconnectAtlassian()" style="color: #ef4444; border-color: #fca5a5;">Disconnect</button>' : ''}
                 <button type="button" class="atlassian-toggle-btn" onclick="toggleAtlassianConfigPanel()">Cancel</button>
                 <button type="button" class="atlassian-btn-sync jira" onclick="saveAtlassianConfig(event)" style="width: auto; padding: 0.45rem 1rem;">Save & Connect</button>
               </div>
@@ -1867,8 +1859,8 @@ async function renderAtlassianSuite(isPushed) {
                   <span>Sprint & Issue Management</span>
                 </div>
               </div>
-              <span class="atlassian-status-badge ${isConnected ? 'connected' : 'standby'}">
-                ${isConnected ? 'Ready to Sync' : 'Standby'}
+              <span class="atlassian-status-badge ${isConnected ? 'connected' : (isDemo ? 'demo' : 'standby')}">
+                ${isConnected ? 'Ready to Sync' : (isDemo ? 'Sandbox Ready' : '⚪ Not Configured')}
               </span>
             </div>
 
@@ -1899,8 +1891,8 @@ async function renderAtlassianSuite(isPushed) {
                   <span>Living Product & Architecture Pages</span>
                 </div>
               </div>
-              <span class="atlassian-status-badge ${isConnected ? 'connected' : 'standby'}">
-                ${isConnected ? 'Ready to Sync' : 'Standby'}
+              <span class="atlassian-status-badge ${isConnected ? 'connected' : (isDemo ? 'demo' : 'standby')}">
+                ${isConnected ? 'Ready to Sync' : (isDemo ? 'Sandbox Ready' : '⚪ Not Configured')}
               </span>
             </div>
 
@@ -1970,6 +1962,31 @@ window.togglePasswordVisibility = function (inputId) {
   }
 };
 
+window.disconnectAtlassian = async function () {
+  if (!confirm('Are you sure you want to disconnect Atlassian JIRA & Confluence?')) return;
+  try {
+    localStorage.removeItem('__acl_atlassian_config__');
+    const emptyPayload = {
+      domain: '',
+      email: '',
+      apiToken: '',
+      jiraProjectKey: '',
+      confluenceSpaceKey: '',
+      isDemoMode: false,
+      connected: false,
+    };
+    await safeFetchJson('/api/atlassian/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(emptyPayload),
+    });
+    alert('✅ Atlassian integration disconnected.');
+    renderAtlassianSuite(true);
+  } catch (err) {
+    alert('⚠️ Error disconnecting: ' + err.message);
+  }
+};
+
 window.saveAtlassianConfig = async function (e) {
   if (e) {
     if (e.preventDefault) e.preventDefault();
@@ -1982,8 +1999,8 @@ window.saveAtlassianConfig = async function (e) {
   const confluenceSpaceKey = document.getElementById('atlConfSpace')?.value?.trim()?.toUpperCase();
   const isDemoMode = Boolean(document.getElementById('atlDemoMode')?.checked);
 
-  if (!isDemoMode && (!domain || !email || !jiraProjectKey || !confluenceSpaceKey)) {
-    alert('⚠️ Please fill in all required fields (Domain, Email, JIRA Key, Confluence Space Key) or enable Sandbox Simulation Mode.');
+  if (!isDemoMode && (!domain || !email || !apiToken || !jiraProjectKey || !confluenceSpaceKey)) {
+    alert('⚠️ Please fill in all required fields (Domain, Email, API Token, JIRA Key, Confluence Space Key) or enable Sandbox Simulation Mode.');
     return;
   }
 
@@ -1997,9 +2014,12 @@ window.saveAtlassianConfig = async function (e) {
     connected: true,
   };
 
-  try {
-    localStorage.setItem('__acl_atlassian_config__', JSON.stringify(payload));
-  } catch (e) {}
+  const saveBtn = document.querySelector('#atlassianConfigForm button[type="submit"]') || (e && e.target);
+  const origBtnText = saveBtn ? saveBtn.textContent : '';
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Verifying...';
+  }
 
   try {
     const res = await safeFetchJson('/api/atlassian/config', {
@@ -2008,17 +2028,23 @@ window.saveAtlassianConfig = async function (e) {
       body: JSON.stringify(payload),
     });
 
-    if (res.ok && (res.data.success || res.data.config || Object.keys(res.data).length > 0)) {
-      alert('✅ Atlassian credentials and workspace keys saved successfully!');
-      renderAtlassianSuite(true);
-    } else if (res.status === 404) {
-      alert('✅ Atlassian credentials saved! Tip: Restart your dev server (Ctrl+C then npm run dev) to activate background disk sync.');
+    if (res.ok && res.data && (res.data.success || res.data.config)) {
+      try {
+        localStorage.setItem('__acl_atlassian_config__', JSON.stringify(payload));
+      } catch (e) {}
+      alert('✅ Atlassian credentials verified and workspace keys saved successfully!');
       renderAtlassianSuite(true);
     } else {
-      alert('⚠️ Error saving configuration: ' + (res.data.error || 'Server returned status ' + res.status));
+      const errMsg = (res.data && res.data.error) || (res.data && res.data.message) || ('Server returned HTTP ' + res.status);
+      alert('⚠️ Error saving configuration: ' + errMsg);
     }
   } catch (err) {
     alert('⚠️ Failed to save Atlassian configuration: ' + err.message);
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = origBtnText;
+    }
   }
 };
 

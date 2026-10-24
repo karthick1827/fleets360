@@ -1,9 +1,25 @@
 
+/* eslint-disable no-empty, unicorn/prefer-single-call */
+/* eslint-disable no-empty, unicorn/prefer-single-call */
 // ACL-ADLC Markdown Studio Live Middleware for Vite
 function aclMarkdownSaverPlugin() {
   return {
     name: 'acl-markdown-saver',
     configureServer(server) {
+      async function getUtils() {
+        const fsMod = await import('node:fs');
+        const fs = fsMod.default || fsMod;
+        const pathMod = await import('node:path');
+        const path = pathMod.default || pathMod;
+        const urlMod = await import('node:url');
+        const pathToFileURL = urlMod.pathToFileURL || (urlMod.default && urlMod.default.pathToFileURL);
+        const cpMod = await import('node:child_process');
+        const execFileSync = cpMod.execFileSync || (cpMod.default && cpMod.default.execFileSync);
+        const exec = cpMod.exec || (cpMod.default && cpMod.default.exec);
+        const projectRoot = process.cwd();
+        return { fs, path, pathToFileURL, execFileSync, exec, projectRoot };
+      }
+
       // URL alias rewrite & direct markdown serving
       server.middlewares.use(async (req, res, next) => {
         const rawUrl = req.url ? req.url.split('?')[0] : '';
@@ -16,14 +32,11 @@ function aclMarkdownSaverPlugin() {
           rawUrl === '/markdown/'
         ) {
           try {
-            const fsMod = await import('node:fs');
-            const fs = fsMod.default || fsMod;
-            const pathMod = await import('node:path');
-            const path = pathMod.default || pathMod;
+            const { fs, path, projectRoot } = await getUtils();
             const candidates = [
-              path.resolve(process.cwd(), 'public/markdown.html'),
-              path.resolve(process.cwd(), 'markdown.html'),
-              path.resolve(process.cwd(), 'src/public/markdown.html'),
+              path.resolve(projectRoot, 'public/markdown.html'),
+              path.resolve(projectRoot, 'markdown.html'),
+              path.resolve(projectRoot, 'src/public/markdown.html'),
             ];
             for (const cand of candidates) {
               if (fs.existsSync(cand)) {
@@ -44,11 +57,7 @@ function aclMarkdownSaverPlugin() {
         const rawUrl = req.url ? req.url.split('?')[0] : '';
         if (rawUrl === '/acl-agents.json') {
           try {
-            const fsMod = await import('node:fs');
-            const fs = fsMod.default || fsMod;
-            const pathMod = await import('node:path');
-            const path = pathMod.default || pathMod;
-            const projectRoot = process.cwd();
+            const { fs, path, projectRoot } = await getUtils();
             const candidates = [
               path.join(projectRoot, 'public', 'acl-agents.json'),
               path.join(projectRoot, 'acl-agents.json'),
@@ -70,12 +79,8 @@ function aclMarkdownSaverPlugin() {
         }
         if (rawUrl === '/greenfield.svg' || rawUrl === '/brownfield.svg' || rawUrl === '/velocityone-studio-logo.png' || rawUrl === '/vo-icon.svg') {
           try {
+            const { fs, path, projectRoot } = await getUtils();
             const svgName = rawUrl.slice(1);
-            const fsMod = await import('node:fs');
-            const fs = fsMod.default || fsMod;
-            const pathMod = await import('node:path');
-            const path = pathMod.default || pathMod;
-            const projectRoot = process.cwd();
             const candidates = [
               path.join(projectRoot, 'public', svgName),
               path.join(projectRoot, 'dist', svgName),
@@ -105,11 +110,7 @@ function aclMarkdownSaverPlugin() {
       server.middlewares.use('/api/list-markdown-files', async (req, res, next) => {
         if (req.method === 'GET') {
           try {
-            const fsMod = await import('node:fs');
-            const fs = fsMod.default || fsMod;
-            const pathMod = await import('node:path');
-            const path = pathMod.default || pathMod;
-            const projectRoot = process.cwd();
+            const { fs, path, projectRoot } = await getUtils();
             const mdFiles = [];
             const scanCandidates = ['_acl-output', '_acl_output', 'acl-output'];
 
@@ -225,11 +226,7 @@ function aclMarkdownSaverPlugin() {
       server.middlewares.use('/api/list-agents', async (req, res, next) => {
         if (req.method === 'GET') {
           try {
-            const fsMod = await import('node:fs');
-            const fs = fsMod.default || fsMod;
-            const pathMod = await import('node:path');
-            const path = pathMod.default || pathMod;
-            const projectRoot = process.cwd();
+            const { fs, path, pathToFileURL, projectRoot } = await getUtils();
 
             // 1. Try reading pre-generated acl-agents.json first
             const manifestCandidates = [
@@ -254,18 +251,19 @@ function aclMarkdownSaverPlugin() {
             const listAgentCandidates = [
               path.join(projectRoot, 'node_modules', 'acl-adlc', 'api', 'list-agents.js'),
               path.join(projectRoot, 'api', 'list-agents.js'),
-              path.join(__dirname, '..', '..', '..', 'api', 'list-agents.js'),
-              path.join(__dirname, '..', 'api', 'list-agents.js'),
             ];
             for (const aCand of listAgentCandidates) {
               if (fs.existsSync(aCand)) {
                 try {
-                  const { collectAgents } = require(aCand);
-                  const payload = collectAgents(projectRoot);
-                  if (payload && Array.isArray(payload.agents) && payload.agents.length > 0) {
-                    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-                    res.end(JSON.stringify(payload));
-                    return;
+                  const agentMod = await import(pathToFileURL(aCand).href);
+                  const collectAgents = agentMod.collectAgents || (agentMod.default && agentMod.default.collectAgents);
+                  if (typeof collectAgents === 'function') {
+                    const payload = collectAgents(projectRoot);
+                    if (payload && Array.isArray(payload.agents) && payload.agents.length > 0) {
+                      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+                      res.end(JSON.stringify(payload));
+                      return;
+                    }
                   }
                 } catch {}
               }
@@ -284,68 +282,50 @@ function aclMarkdownSaverPlugin() {
               path.join(projectRoot, '.agent', 'skills'),
               path.join(projectRoot, '.cursor', 'skills'),
               path.join(projectRoot, '.windsurf', 'skills'),
-              path.join(projectRoot, '.codeium', 'windsurf', 'skills'),
               path.join(projectRoot, '.github', 'skills'),
-              path.join(projectRoot, '.cline', 'skills'),
-              path.join(projectRoot, '.roo', 'skills'),
-              path.join(projectRoot, '.kiro', 'skills'),
-              path.join(projectRoot, '.codex', 'skills'),
               path.join(projectRoot, '_acl', 'skills'),
               path.join(projectRoot, 'src', 'acl-skills'),
-              path.join(projectRoot, 'src', 'core-skills'),
               path.join(projectRoot, 'node_modules', 'acl-adlc', 'src', 'acl-skills'),
-              path.join(projectRoot, 'node_modules', 'acl-adlc', 'src', 'core-skills'),
-            ];
+              path.join(projectRoot, 'web-bundles'),
+              userHome ? path.join(userHome, '.gemini', 'antigravity-cli', 'skills') : null,
+              userHome ? path.join(userHome, '.agents', 'skills') : null,
+            ].filter(Boolean);
 
-            if (userHome) {
-              agentRoots.push(
-                path.join(userHome, '.agents', 'skills'),
-                path.join(userHome, '.claude', 'skills'),
-                path.join(userHome, '.gemini', 'antigravity-cli', 'skills'),
-                path.join(userHome, '.gemini', 'antigravity', 'skills'),
-                path.join(userHome, '.cursor', 'skills'),
-                path.join(userHome, '.windsurf', 'skills'),
-                path.join(userHome, '.cline', 'skills'),
-                path.join(userHome, '.roo', 'skills'),
-                path.join(userHome, '.kiro', 'skills'),
-                path.join(userHome, '.codex', 'skills')
-              );
-            }
-
-            function scanAgentDir(dirPath) {
-              if (!fs.existsSync(dirPath)) return;
-              const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-              for (const entry of entries) {
-                if (!entry.isDirectory()) continue;
-                const skillDir = path.join(dirPath, entry.name);
-                let skillPath = path.join(skillDir, 'SKILL.md');
-                if (!fs.existsSync(skillPath)) {
-                  const found = fs.readdirSync(skillDir).find(f => f.toLowerCase() === 'skill.md');
-                  if (found) skillPath = path.join(skillDir, found);
-                  else skillPath = null;
-                }
-
-                if (skillPath && fs.existsSync(skillPath)) {
-                  addAgent(entry.name, skillDir, skillPath);
-                } else {
-                  try {
-                    const subEntries = fs.readdirSync(skillDir, { withFileTypes: true });
-                    for (const sub of subEntries) {
-                      if (!sub.isDirectory()) continue;
-                      const nestedDir = path.join(skillDir, sub.name);
-                      let nestedSkill = path.join(nestedDir, 'SKILL.md');
-                      if (!fs.existsSync(nestedSkill)) {
-                        const found = fs.readdirSync(nestedDir).find(f => f.toLowerCase() === 'skill.md');
-                        if (found) nestedSkill = path.join(nestedDir, found);
-                        else nestedSkill = null;
+            function scanAgentDir(dir) {
+              if (!fs.existsSync(dir)) return;
+              try {
+                const subdirs = fs.readdirSync(dir, { withFileTypes: true });
+                for (const sub of subdirs) {
+                  if (!sub.isDirectory() || sub.name.startsWith('.')) continue;
+                  const fullSub = path.join(dir, sub.name);
+                  let skillPath = path.join(fullSub, 'SKILL.md');
+                  if (!fs.existsSync(skillPath)) {
+                    const found = fs.readdirSync(fullSub).find(f => f.toLowerCase() === 'skill.md');
+                    if (found) skillPath = path.join(fullSub, found);
+                    else skillPath = null;
+                  }
+                  if (skillPath && fs.existsSync(skillPath)) {
+                    addAgent(sub.name, fullSub, skillPath);
+                  } else {
+                    try {
+                      const nested = fs.readdirSync(fullSub, { withFileTypes: true });
+                      for (const n of nested) {
+                        if (!n.isDirectory() || n.name.startsWith('.')) continue;
+                        const nestedDir = path.join(fullSub, n.name);
+                        let nestedSkill = path.join(nestedDir, 'SKILL.md');
+                        if (!fs.existsSync(nestedSkill)) {
+                          const found = fs.readdirSync(nestedDir).find(f => f.toLowerCase() === 'skill.md');
+                          if (found) nestedSkill = path.join(nestedDir, found);
+                          else nestedSkill = null;
+                        }
+                        if (nestedSkill && fs.existsSync(nestedSkill)) {
+                          addAgent(n.name, nestedDir, nestedSkill);
+                        }
                       }
-                      if (nestedSkill && fs.existsSync(nestedSkill)) {
-                        addAgent(sub.name, nestedDir, nestedSkill);
-                      }
-                    }
-                  } catch (e) {}
+                    } catch {}
+                  }
                 }
-              }
+              } catch {}
             }
 
             function addAgent(agentName, agentFolder, skillPath) {
@@ -355,9 +335,9 @@ function aclMarkdownSaverPlugin() {
                 seenAgentNames.add(agentName);
                 let displayName = agentName;
                 let description = '';
-                const nameMatch = content.match(/^name:[ 	]*["']?([^"'\r\n]+)["']?/m);
+                const nameMatch = content.match(/^name:[ \t]*["']?([^"'\r\n]+)["']?/m);
                 if (nameMatch && nameMatch[1]) displayName = nameMatch[1].trim();
-                const descMatch = content.match(/^description:[ 	]*["']?([^"'\r\n]+)["']?/m);
+                const descMatch = content.match(/^description:[ \t]*["']?([^"'\r\n]+)["']?/m);
                 if (descMatch && descMatch[1]) description = descMatch[1].trim();
 
                 agents.push({
@@ -375,7 +355,7 @@ function aclMarkdownSaverPlugin() {
                     content: content,
                   },
                 });
-              } catch (e) {}
+              } catch {}
             }
 
             for (const rootCandidate of agentRoots) {
@@ -391,12 +371,11 @@ function aclMarkdownSaverPlugin() {
                   if (!seenAgentNames.has(aName)) {
                     const cPath = path.join(copilotDir, cFile);
                     try {
-                      const cContent = fs.readFileSync(cPath, 'utf8');
                       addAgent(aName, copilotDir, cPath);
-                    } catch (e) {}
+                    } catch {}
                   }
                 }
-              } catch (e) {}
+              } catch {}
             }
 
             agents.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
@@ -417,17 +396,35 @@ function aclMarkdownSaverPlugin() {
       server.middlewares.use('/api/git-details', async (req, res, next) => {
         if (req.method === 'GET') {
           try {
-            const { execFileSync } = await import('node:child_process');
+            const { path, execFileSync, projectRoot } = await getUtils();
             const url = new URL(req.url, 'http://localhost');
             const simulateUnpushed =
               url.searchParams.get('simulate') === 'unpushed' || url.searchParams.get('unpushed') === 'true';
 
-            const localAppData =
-              process.env.LOCALAPPDATA || (process.env.USERPROFILE ? process.env.USERPROFILE + '\\AppData\\Local' : '');
-            const gitUserPath = localAppData ? localAppData + '\\Programs\\Git\\cmd' : '';
+            const isWindows = process.platform === 'win32';
+            const extraPaths = [];
+            if (isWindows) {
+              if (process.env.LOCALAPPDATA) {
+                extraPaths.push(path.join(process.env.LOCALAPPDATA, 'Programs', 'Git', 'cmd'));
+                extraPaths.push(path.join(process.env.LOCALAPPDATA, 'Programs', 'Git', 'bin'));
+              }
+              if (process.env.ProgramFiles) {
+                extraPaths.push(path.join(process.env.ProgramFiles, 'Git', 'cmd'));
+                extraPaths.push(path.join(process.env.ProgramFiles, 'Git', 'bin'));
+              }
+              if (process.env['ProgramFiles(x86)']) {
+                extraPaths.push(path.join(process.env['ProgramFiles(x86)'], 'Git', 'cmd'));
+              }
+            } else {
+              extraPaths.push('/usr/local/bin', '/usr/bin', '/bin', '/opt/homebrew/bin');
+            }
+
+            const currentPath = process.env.PATH || '';
+            const pathSep = isWindows ? ';' : ':';
+            const additions = extraPaths.filter((p) => p && !currentPath.includes(p));
             const env = {
               ...process.env,
-              PATH: [process.env.PATH || '', gitUserPath, 'C:\\Program Files\\Git\\cmd'].filter(Boolean).join(';'),
+              PATH: additions.length > 0 ? currentPath + pathSep + additions.join(pathSep) : currentPath,
             };
 
             if (simulateUnpushed) {
@@ -435,6 +432,8 @@ function aclMarkdownSaverPlugin() {
               res.end(
                 JSON.stringify({
                   isPushed: false,
+                  repoConnected: false,
+                  repoDeleted: false,
                   simulated: true,
                   message: 'Repository simulated as not pushed to GitHub',
                   userDetails: null,
@@ -452,78 +451,19 @@ function aclMarkdownSaverPlugin() {
                 env,
                 encoding: 'utf8',
               }).trim();
-            } catch (e) {
+            } catch {
               remoteOrigin = '';
             }
 
-            const isGitHub = /github\.com/i.test(remoteOrigin) || /gitlab\.com/i.test(remoteOrigin);
-
-            let repoOwner = '';
-            let repoName = '';
-            const match = remoteOrigin.match(/[:/]([^/:]+)\/([^/:]+?)(?:\.git)?$/);
-            if (match) {
-              repoOwner = match[1];
-              repoName = match[2];
-            }
-
-            let isPushed = false;
-            if (isGitHub) {
-              let liveRemoteExists = false;
-              try {
-                const lsOut = execFileSync('git', ['ls-remote', '--exit-code', 'origin', 'HEAD'], {
-                  cwd: projectRoot,
-                  env,
-                  encoding: 'utf8',
-                  timeout: 5000,
-                  stdio: ['ignore', 'pipe', 'ignore'],
-                }).trim();
-                liveRemoteExists = Boolean(lsOut && lsOut.length > 0);
-              } catch (e) {
-                liveRemoteExists = false;
-              }
-
-              if (!liveRemoteExists && repoOwner && repoName) {
-                try {
-                  const repoRes = await fetch('https://api.github.com/repos/' + repoOwner + '/' + repoName, {
-                    headers: { 'User-Agent': 'Node-ACL-ADLC-Studio' },
-                  });
-                  if (repoRes.ok) {
-                    liveRemoteExists = true;
-                  }
-                } catch (e) {}
-              }
-
-              if (liveRemoteExists) {
-                try {
-                  const unpushedCommits = execFileSync('git', ['log', '@{u}..HEAD', '--oneline'], {
-                    cwd: projectRoot,
-                    env,
-                    encoding: 'utf8',
-                    stdio: ['ignore', 'pipe', 'ignore'],
-                  }).trim();
-                  isPushed = unpushedCommits.length === 0;
-                } catch (e) {
-                  isPushed = true;
-                }
-              } else {
-                isPushed = false;
-              }
-            }
-
-            if (!isPushed) {
-              res.setHeader('Content-Type', 'application/json');
-              res.end(
-                JSON.stringify({
-                  isPushed: false,
-                  repoConnected: false,
-                  repoDeleted: Boolean(repoDeleted),
-                  remoteOrigin: remoteOrigin || null,
-                  userDetails: null,
-                  projectDetails: null,
-                  gitDetails: null,
-                }),
-              );
-              return;
+            let currentBranch = '';
+            try {
+              currentBranch = execFileSync('git', ['branch', '--show-current'], {
+                cwd: projectRoot,
+                env,
+                encoding: 'utf8',
+              }).trim();
+            } catch {
+              currentBranch = '';
             }
 
             let gitUserName = '';
@@ -531,66 +471,183 @@ function aclMarkdownSaverPlugin() {
             let lastActivityDate = new Date().toISOString();
             let lastCommitMsg = 'Latest commit';
             try {
-              gitUserName =
-                execFileSync('git', ['log', '-1', '--format=%an'], {
-                  cwd: projectRoot,
-                  env,
-                  encoding: 'utf8',
-                }).trim() || gitUserName;
-              gitUserEmail =
-                execFileSync('git', ['log', '-1', '--format=%ae'], {
-                  cwd: projectRoot,
-                  env,
-                  encoding: 'utf8',
-                }).trim() || gitUserEmail;
-              lastActivityDate =
-                execFileSync('git', ['log', '-1', '--format=%cd'], {
-                  cwd: projectRoot,
-                  env,
-                  encoding: 'utf8',
-                }).trim() || lastActivityDate;
-              lastCommitMsg =
-                execFileSync('git', ['log', '-1', '--format=%s'], {
-                  cwd: projectRoot,
-                  env,
-                  encoding: 'utf8',
-                }).trim() || lastCommitMsg;
-            } catch (e) {}
+              gitUserName = execFileSync('git', ['config', 'user.name'], { cwd: projectRoot, env, encoding: 'utf8' }).trim();
+            } catch {}
+            try {
+              gitUserEmail = execFileSync('git', ['config', 'user.email'], { cwd: projectRoot, env, encoding: 'utf8' }).trim();
+            } catch {}
 
+            try {
+              const commitLog = execFileSync('git', ['log', '-1', '--format=%an%x00%ae%x00%cd%x00%s'], {
+                cwd: projectRoot,
+                env,
+                encoding: 'utf8',
+              }).trim();
+              if (commitLog) {
+                const parts = commitLog.split('\0');
+                if (!gitUserName && parts[0]) gitUserName = parts[0].trim();
+                if (!gitUserEmail && parts[1]) gitUserEmail = parts[1].trim();
+                if (parts[2]) lastActivityDate = parts[2].trim();
+                if (parts[3]) lastCommitMsg = parts[3].trim();
+              }
+            } catch {}
+
+            let repoOwner = '';
+            let repoName = '';
+            if (remoteOrigin) {
+              const match = remoteOrigin.match(/[:/]([^/:]+)\/([^/:]+?)(?:\.git)?$/);
+              if (match) {
+                repoOwner = match[1];
+                repoName = match[2];
+              }
+            }
+            if (!repoName) {
+              repoName = path.basename(projectRoot);
+            }
+
+            const isGitHub = /github\.com/i.test(remoteOrigin) || /gitlab\.com/i.test(remoteOrigin);
+            let isPushed = false;
             let ghUserData = null;
-            if (repoOwner) {
+            let ghRepoData = null;
+            let liveRemoteExists = false;
+            let repoDeleted = false;
+
+            if (remoteOrigin) {
               try {
-                const userRes = await fetch('https://api.github.com/users/' + repoOwner, {
-                  headers: { 'User-Agent': 'Node-ACL-ADLC-Studio' },
-                });
-                if (userRes.ok) {
-                  ghUserData = await userRes.json();
+                const lsOut = execFileSync('git', ['ls-remote', '--exit-code', 'origin', 'HEAD'], {
+                  cwd: projectRoot,
+                  env,
+                  encoding: 'utf8',
+                  timeout: 6000,
+                  stdio: ['ignore', 'pipe', 'pipe'],
+                }).trim();
+                if (lsOut && lsOut.length > 0) {
+                  liveRemoteExists = true;
                 }
-              } catch (e) {}
+              } catch (err) {
+                const errText = ((err.stderr ? err.stderr.toString() : '') + ' ' + (err.stdout ? err.stdout.toString() : '') + ' ' + (err.message || '')).toLowerCase();
+                if (errText.includes('not found') || errText.includes('does not exist') || errText.includes('fatal: repository')) {
+                  repoDeleted = true;
+                }
+              }
+
+              // Check unpushed commits relative to upstream
+              try {
+                const unpushedCommits = execFileSync('git', ['log', '@{u}..HEAD', '--oneline'], {
+                  cwd: projectRoot,
+                  env,
+                  encoding: 'utf8',
+                  stdio: ['ignore', 'pipe', 'ignore'],
+                }).trim();
+                isPushed = unpushedCommits.length === 0;
+              } catch {
+                // If no upstream tracking branch set yet, check if repository has commits
+                try {
+                  const localCommits = execFileSync('git', ['log', '-1', '--oneline'], {
+                    cwd: projectRoot,
+                    env,
+                    encoding: 'utf8',
+                    stdio: ['ignore', 'pipe', 'ignore'],
+                  }).trim();
+                  isPushed = Boolean(localCommits);
+                } catch {
+                  isPushed = true;
+                }
+              }
+
+              // Fetch GitHub public profile for avatar & display name if repoOwner exists
+              if (repoOwner && !repoDeleted) {
+                const ghHeaders = { 'User-Agent': 'Node-ACL-ADLC-Studio' };
+                if (process.env.GITHUB_TOKEN || process.env.GH_TOKEN) {
+                  ghHeaders['Authorization'] = 'token ' + (process.env.GITHUB_TOKEN || process.env.GH_TOKEN);
+                }
+                try {
+                  const repoRes = await fetch('https://api.github.com/repos/' + repoOwner + '/' + repoName, {
+                    headers: ghHeaders,
+                  });
+                  if (repoRes.status === 404) {
+                    repoDeleted = true;
+                  } else if (repoRes.ok) {
+                    ghRepoData = await repoRes.json();
+                    liveRemoteExists = true;
+                  }
+                } catch {}
+
+                if (!repoDeleted) {
+                  try {
+                    const userRes = await fetch('https://api.github.com/users/' + repoOwner, {
+                      headers: ghHeaders,
+                    });
+                    if (userRes.ok) {
+                      ghUserData = await userRes.json();
+                    }
+                  } catch {}
+                }
+              }
+            }
+
+            if (!remoteOrigin || repoDeleted) {
+              res.setHeader('Content-Type', 'application/json');
+              res.end(
+                JSON.stringify({
+                  isPushed: false,
+                  repoConnected: false,
+                  repoDeleted: Boolean(repoDeleted),
+                  remoteOrigin: remoteOrigin || null,
+                  message: repoDeleted
+                    ? 'The remote repository (' + (remoteOrigin || 'origin') + ') was deleted or does not exist on GitHub.'
+                    : 'No remote repository has been linked to this project.',
+                  userDetails: {
+                    username: '',
+                    fullName: '',
+                    email: '',
+                    avatarUrl: null,
+                    orgRole: '',
+                  },
+                  projectDetails: {
+                    projectName: repoName || path.basename(projectRoot),
+                    userRole: '',
+                    projectStatus: repoDeleted
+                      ? 'Remote repository was deleted on GitHub'
+                      : 'No repository connected to GitHub',
+                    linkedRepositories: remoteOrigin ? [remoteOrigin] : [],
+                    assignedDate: '',
+                  },
+                  gitDetails: {
+                    permissionLevel: '',
+                    teams: [],
+                    twoFactorStatus: '',
+                    lastActivity: '',
+                  },
+                }),
+              );
+              return;
             }
 
             const responsePayload = {
-              isPushed: true,
+              isPushed: Boolean(isPushed),
               repoConnected: true,
               repoDeleted: false,
               remoteOrigin,
               userDetails: {
-                username: (ghUserData && ghUserData.login) || repoOwner || gitUserName,
-                fullName: (ghUserData && ghUserData.name) || gitUserName,
+                username: (ghUserData && ghUserData.login) || repoOwner || gitUserName || 'Developer',
+                fullName: (ghUserData && ghUserData.name) || gitUserName || repoOwner || 'Developer',
                 email: gitUserEmail || (ghUserData && ghUserData.email) || '',
                 avatarUrl: (ghUserData && ghUserData.avatar_url) || null,
-                orgRole: 'Admin',
+                orgRole: 'Admin / Maintainer',
               },
               projectDetails: {
-                projectName: repoName || path.basename(projectRoot),
+                projectName: (ghRepoData && ghRepoData.name) || repoName || path.basename(projectRoot),
                 userRole: 'Lead Developer',
-                projectStatus: 'Active',
+                projectStatus: isPushed
+                  ? 'Active (GitHub Linked)'
+                  : 'Active (Branch: ' + (currentBranch || 'main') + ' - Pending Push)',
                 linkedRepositories: [remoteOrigin],
-                assignedDate: '2026-03-24',
+                assignedDate: lastActivityDate ? new Date(lastActivityDate).toLocaleDateString() : new Date().toLocaleDateString(),
               },
               gitDetails: {
                 permissionLevel: 'Admin / Maintainer',
-                teams: ['Core Engineering', 'Product Delivery'],
+                teams: repoOwner ? ['@' + repoOwner] : ['Core Engineering'],
                 twoFactorStatus: 'Enabled',
                 lastActivity: lastActivityDate + ' (' + lastCommitMsg + ')',
               },
@@ -601,24 +658,22 @@ function aclMarkdownSaverPlugin() {
           } catch (err) {
             res.statusCode = 500;
             res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ error: err.message }));
+            res.end(JSON.stringify({ error: err.message, isPushed: false, repoConnected: false }));
           }
         } else {
           next();
         }
       });
+
+      // API Endpoint: POST /api/save-markdown
       server.middlewares.use('/api/save-markdown', (req, res, next) => {
         if (req.method === 'POST') {
           let body = '';
           req.on('data', chunk => { body += chunk; });
           req.on('end', async () => {
             try {
+              const { fs, path, execFileSync, exec, projectRoot } = await getUtils();
               const { folderPath, filename, content, status, autoPush } = JSON.parse(body);
-              const fsMod = await import('node:fs');
-              const fs = fsMod.default || fsMod;
-              const pathMod = await import('node:path');
-              const path = pathMod.default || pathMod;
-              const { exec } = await import('node:child_process');
 
               let cleanFolder = (folderPath || '').replaceAll('\\', '/').trim();
               if (!cleanFolder.startsWith('_acl-output') && !cleanFolder.startsWith('_acl_output') && !cleanFolder.startsWith('acl-output')) {
@@ -626,33 +681,109 @@ function aclMarkdownSaverPlugin() {
               }
               if (cleanFolder === '_acl-output' || cleanFolder === 'root' || cleanFolder === '.') {
                 const lowerName = (filename || '').toLowerCase();
-                if (lowerName === 'project-context.md') cleanFolder = '_acl-output';
-                else if (lowerName === 'brief.md') cleanFolder = '_acl-output/1-analysis/acl-product-brief';
-                else if (lowerName === 'prd.md') cleanFolder = '_acl-output/2-plan-workflows/acl-prd';
-                else if (lowerName === 'architecture-spine.md' || lowerName === 'architecture.md') cleanFolder = '_acl-output/3-solutioning/acl-architecture';
-                else if (lowerName === 'epics.md') cleanFolder = '_acl-output/3-solutioning/acl-create-epics-and-stories';
+                switch (lowerName) {
+                  case 'project-context.md': {
+                    cleanFolder = '_acl-output';
+                    break;
+                  }
+                  case 'brief.md': {
+                    cleanFolder = '_acl-output/1-analysis/acl-product-brief';
+                    break;
+                  }
+                  case 'prd.md': {
+                    cleanFolder = '_acl-output/2-plan-workflows/acl-prd';
+                    break;
+                  }
+                  case 'architecture-spine.md':
+                  case 'architecture.md': {
+                    cleanFolder = '_acl-output/3-solutioning/acl-architecture';
+                    break;
+                  }
+                  case 'epics.md': {
+                    cleanFolder = '_acl-output/3-solutioning/acl-create-epics-and-stories';
+                    break;
+                  }
+                }
               }
-              const targetDir = path.resolve(process.cwd(), cleanFolder);
+
+              let targetDir = path.resolve(projectRoot, cleanFolder);
+              let targetFile = path.join(targetDir, filename);
+
+              // If file does not exist at default cleanFolder, check if it already exists elsewhere in _acl-output
+              if (!fs.existsSync(targetFile)) {
+                function searchFile(dir) {
+                  if (!fs.existsSync(dir)) return null;
+                  const entries = fs.readdirSync(dir, { withFileTypes: true });
+                  for (const entry of entries) {
+                    const full = path.join(dir, entry.name);
+                    if (entry.isDirectory() && !entry.name.startsWith('.')) {
+                      const res = searchFile(full);
+                      if (res) return res;
+                    } else if (entry.isFile() && entry.name.toLowerCase() === filename.toLowerCase()) {
+                      return full;
+                    }
+                  }
+                  return null;
+                }
+                const existing = searchFile(path.resolve(projectRoot, '_acl-output'));
+                if (existing) {
+                  targetFile = existing;
+                  targetDir = path.dirname(existing);
+                }
+              }
+
               if (!fs.existsSync(targetDir)) {
                 fs.mkdirSync(targetDir, { recursive: true });
               }
-              const targetFile = path.join(targetDir, filename);
               fs.writeFileSync(targetFile, content, 'utf8');
 
-              if (autoPush) {
+              // Check GitHub remote connectivity
+              const isWindows = process.platform === 'win32';
+              const localAppData = process.env.LOCALAPPDATA || '';
+              const gitUserPath = localAppData ? path.join(localAppData, 'Programs', 'Git', 'cmd') : '';
+              const env = {
+                ...process.env,
+                PATH: [process.env.PATH || '', gitUserPath, 'C:\\Program Files\\Git\\cmd'].filter(Boolean).join(isWindows ? ';' : ':'),
+              };
+
+              let remoteOrigin = '';
+              try {
+                remoteOrigin = execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: projectRoot, env, encoding: 'utf8' }).trim();
+              } catch {}
+
+              let repoConnected = false;
+              if (remoteOrigin) {
+                try {
+                  const lsOut = execFileSync('git', ['ls-remote', '--exit-code', 'origin', 'HEAD'], {
+                    cwd: projectRoot,
+                    env,
+                    encoding: 'utf8',
+                    timeout: 5000,
+                    stdio: ['ignore', 'pipe', 'pipe'],
+                  }).trim();
+                  if (lsOut && lsOut.length > 0) repoConnected = true;
+                } catch {}
+              }
+
+              if (autoPush && repoConnected) {
                 const gitCmd = 'git add "' + targetFile + '" && git commit -m "docs: update ' + filename + ' [' + (status || 'Approved') + ']" && git push';
-                exec(gitCmd, { cwd: process.cwd() }, (gitErr, gitStdout, gitStderr) => {
+                exec(gitCmd, { cwd: projectRoot, env }, (gitErr) => {
+                  res.setHeader('Content-Type', 'application/json');
                   if (gitErr) {
-                    res.setHeader('Content-Type', 'application/json');
-                    res.end(JSON.stringify({ success: true, path: targetFile, gitPushed: false, gitError: gitErr.message }));
+                    res.end(JSON.stringify({ success: true, path: targetFile, repoConnected: true, gitPushed: false, gitError: gitErr.message }));
                   } else {
-                    res.setHeader('Content-Type', 'application/json');
-                    res.end(JSON.stringify({ success: true, path: targetFile, gitPushed: true }));
+                    res.end(JSON.stringify({ success: true, path: targetFile, repoConnected: true, gitPushed: true }));
                   }
                 });
               } else {
                 res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ success: true, path: targetFile, gitPushed: false }));
+                res.end(JSON.stringify({
+                  success: true,
+                  path: targetFile,
+                  repoConnected: Boolean(repoConnected),
+                  gitPushed: false,
+                  message: repoConnected ? 'Saved to IDE (push pending)' : 'Saved to IDE (Not synced with GitHub)',
+                }));
               }
             } catch (err) {
               res.statusCode = 500;
@@ -673,20 +804,37 @@ function aclMarkdownSaverPlugin() {
         }
 
         try {
-          const { pathToFileURL } = require('node:url');
+          const { fs, path, pathToFileURL, projectRoot } = await getUtils();
+
           const candidatePaths = [
-            path.resolve(process.cwd(), 'tools', 'atlassian-service.mjs'),
-            path.resolve(process.cwd(), 'node_modules', 'acl-adlc', 'tools', 'atlassian-service.mjs'),
-            path.resolve(__dirname, 'tools', 'atlassian-service.mjs'),
-            path.resolve(__dirname, '..', '..', 'atlassian-service.mjs'),
-            path.resolve(__dirname, '..', '..', '..', 'tools', 'atlassian-service.mjs'),
+            path.resolve(projectRoot, 'tools', 'atlassian-service.mjs'),
+            path.resolve(projectRoot, 'node_modules', 'acl-adlc', 'tools', 'atlassian-service.mjs'),
+            path.resolve(projectRoot, 'src', 'tools', 'atlassian-service.mjs'),
           ];
           const servicePath = candidatePaths.find((p) => fs.existsSync(p));
           if (!servicePath) {
             throw new Error('Atlassian service module not found in project or framework.');
           }
           const atlassianMod = await import(pathToFileURL(servicePath).href + '?t=' + Date.now());
-          const projectRoot = process.cwd();
+
+          function readJsonBody() {
+            return new Promise((resolve) => {
+              if (req.body && typeof req.body === 'object') {
+                return resolve(req.body);
+              }
+              let body = '';
+              req.on('data', (chunk) => {
+                body += chunk;
+              });
+              req.on('end', () => {
+                try {
+                  resolve(JSON.parse(body || '{}'));
+                } catch {
+                  resolve({});
+                }
+              });
+            });
+          }
 
           if (url.pathname === '/api/atlassian/config') {
             if (req.method === 'GET') {
@@ -695,23 +843,16 @@ function aclMarkdownSaverPlugin() {
               return res.end(JSON.stringify(cfg));
             }
             if (req.method === 'POST') {
-              let body = '';
-              req.on('data', (chunk) => {
-                body += chunk;
-              });
-              req.on('end', async () => {
-                try {
-                  const payload = JSON.parse(body || '{}');
-                  const saved = atlassianMod.saveAtlassianConfig(projectRoot, payload);
-                  res.setHeader('Content-Type', 'application/json');
-                  res.end(JSON.stringify({ success: true, config: saved }));
-                } catch (e) {
-                  res.statusCode = 400;
-                  res.setHeader('Content-Type', 'application/json');
-                  res.end(JSON.stringify({ success: false, error: e.message }));
-                }
-              });
-              return;
+              const payload = await readJsonBody();
+              try {
+                const saved = await atlassianMod.saveAtlassianConfig(projectRoot, payload);
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({ success: true, config: saved }));
+              } catch (saveErr) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({ success: false, error: saveErr.message }));
+              }
             }
           }
 
@@ -735,83 +876,31 @@ function aclMarkdownSaverPlugin() {
           }
 
           if (url.pathname === '/api/atlassian/sync-jira' && req.method === 'POST') {
-            let body = '';
-            req.on('data', (chunk) => {
-              body += chunk;
-            });
-            req.on('end', async () => {
-              try {
-                const payload = JSON.parse(body || '{}');
-                const result = await atlassianMod.syncToJira(projectRoot, payload);
-                res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ success: true, ...result }));
-              } catch (e) {
-                res.statusCode = 500;
-                res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ success: false, error: e.message }));
-              }
-            });
-            return;
+            const payload = await readJsonBody();
+            const result = await atlassianMod.syncToJira(projectRoot, payload);
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({ success: true, ...result }));
           }
 
           if (url.pathname === '/api/atlassian/pull-jira' && req.method === 'POST') {
-            let body = '';
-            req.on('data', (chunk) => {
-              body += chunk;
-            });
-            req.on('end', async () => {
-              try {
-                const payload = JSON.parse(body || '{}');
-                const result = await atlassianMod.pullFromJira(projectRoot, payload);
-                res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ success: true, ...result }));
-              } catch (e) {
-                res.statusCode = 500;
-                res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ success: false, error: e.message }));
-              }
-            });
-            return;
+            const payload = await readJsonBody();
+            const result = await atlassianMod.pullFromJira(projectRoot, payload);
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({ success: true, ...result }));
           }
 
           if (url.pathname === '/api/atlassian/sync-confluence' && req.method === 'POST') {
-            let body = '';
-            req.on('data', (chunk) => {
-              body += chunk;
-            });
-            req.on('end', async () => {
-              try {
-                const payload = JSON.parse(body || '{}');
-                const result = await atlassianMod.syncToConfluence(projectRoot, payload);
-                res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ success: true, ...result }));
-              } catch (e) {
-                res.statusCode = 500;
-                res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ success: false, error: e.message }));
-              }
-            });
-            return;
+            const payload = await readJsonBody();
+            const result = await atlassianMod.syncToConfluence(projectRoot, payload);
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({ success: true, ...result }));
           }
 
           if (url.pathname === '/api/atlassian/pull-confluence' && req.method === 'POST') {
-            let body = '';
-            req.on('data', (chunk) => {
-              body += chunk;
-            });
-            req.on('end', async () => {
-              try {
-                const payload = JSON.parse(body || '{}');
-                const result = await atlassianMod.pullFromConfluence(projectRoot, payload);
-                res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ success: true, ...result }));
-              } catch (e) {
-                res.statusCode = 500;
-                res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ success: false, error: e.message }));
-              }
-            });
-            return;
+            const payload = await readJsonBody();
+            const result = await atlassianMod.pullFromConfluence(projectRoot, payload);
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({ success: true, ...result }));
           }
 
           if (url.pathname === '/api/atlassian/sync-history' && req.method === 'GET') {
@@ -824,7 +913,7 @@ function aclMarkdownSaverPlugin() {
         } catch (err) {
           res.statusCode = 500;
           res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ error: err.message }));
+          res.end(JSON.stringify({ error: err.message, success: false }));
         }
       });
     }
