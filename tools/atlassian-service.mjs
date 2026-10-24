@@ -10,6 +10,8 @@ import { githubContextFromRequest, loadAclOutputMarkdownFromGitHub } from './acl
 import {
   discoverDeliverablesFromWorkspace,
   discoverStoriesAndEpicsFromWorkspace,
+  filterConfluencePhaseDeliverables,
+  filterJiraStorySpecs,
   isServerlessRuntime,
   queueClientMarkdown,
   splitAtlassianPayload,
@@ -687,6 +689,16 @@ export async function fetchJiraIssues(config) {
  * Updates existing tickets in-place via PUT to prevent duplicates,
  * or creates new tickets via POST if they do not exist yet.
  */
+function mergeClientMapping(projectRoot, clientMapping) {
+  const base = getAtlassianMapping(projectRoot);
+  if (!clientMapping || typeof clientMapping !== 'object') return base;
+  return {
+    epics: { ...base.epics, ...(clientMapping.epics || {}) },
+    stories: { ...base.stories, ...(clientMapping.stories || {}) },
+    confluence: { ...base.confluence, ...(clientMapping.confluence || {}) },
+  };
+}
+
 async function resolveWorkspace(projectRoot, customConfig = {}, req = null) {
   const split = splitAtlassianPayload(customConfig);
   let { workspaceFiles, configFields } = split;
@@ -717,13 +729,39 @@ function persistAtlassianSession(projectRoot, config) {
   }
 }
 
-export async function syncToJira(projectRoot, customConfig = {}, req = null) {
-  const { workspaceFiles, configFields, useWorkspace } = await resolveWorkspace(projectRoot, customConfig, req);
-  const config = { ...getAtlassianConfig(projectRoot), ...configFields };
-  const { epics, stories } = useWorkspace
+export async function discoverWorkspace(projectRoot, customConfig = {}, req = null) {
+  const split = splitAtlassianPayload(customConfig);
+  const { workspaceFiles, useWorkspace } = await resolveWorkspace(projectRoot, customConfig, req);
+  const discovered = useWorkspace
     ? discoverStoriesAndEpicsFromWorkspace(workspaceFiles)
     : discoverStoriesAndEpics(projectRoot);
-  const mapping = getAtlassianMapping(projectRoot);
+  const stories = filterJiraStorySpecs(discovered.stories || []);
+  const mapping = mergeClientMapping(projectRoot, split.clientMapping);
+  const rawDel = useWorkspace
+    ? discoverDeliverablesFromWorkspace(workspaceFiles, mapping)
+    : discoverDeliverables(projectRoot);
+  const deliverables = filterConfluencePhaseDeliverables(rawDel);
+  const history = getSyncHistory(projectRoot);
+  return {
+    stories,
+    epics: [],
+    storyCount: stories.length,
+    deliverables,
+    deliverableCount: deliverables.length,
+    history,
+  };
+}
+
+export async function syncToJira(projectRoot, customConfig = {}, req = null) {
+  const split = splitAtlassianPayload(customConfig);
+  const { workspaceFiles, configFields, useWorkspace } = await resolveWorkspace(projectRoot, customConfig, req);
+  const config = { ...getAtlassianConfig(projectRoot), ...configFields };
+  const discovered = useWorkspace
+    ? discoverStoriesAndEpicsFromWorkspace(workspaceFiles)
+    : discoverStoriesAndEpics(projectRoot);
+  const epics = discovered.epics || [];
+  const stories = filterJiraStorySpecs(discovered.stories || []);
+  const mapping = mergeClientMapping(projectRoot, split.clientMapping);
 
   const isLive = Boolean(config.domain && config.email && config.apiToken && !config.isDemoMode);
   const domain = (config.domain || '').replace(/\/+$/, '');
@@ -736,11 +774,11 @@ export async function syncToJira(projectRoot, customConfig = {}, req = null) {
         'Atlassian credentials were not received by the server. Open Configure Connection, save again, then retry sync.',
     };
   }
-  if (isLive && epics.length === 0 && stories.length === 0) {
+  if (isLive && stories.length === 0) {
     return {
       success: false,
       error:
-        'No epics or stories found in _acl-output. Confirm GitHub repo/branch is correct, open Markdown Studio file list (sync from GitHub), then retry.',
+        'No story spec files (spec-*.md / story-*.md) found in _acl-output. Sync from GitHub in Markdown Studio, then retry.',
       workspaceFileCount: workspaceFiles.length,
     };
   }
@@ -749,7 +787,7 @@ export async function syncToJira(projectRoot, customConfig = {}, req = null) {
     mode: isLive ? 'live-cloud' : 'simulated-demo',
     domain,
     projectKey,
-    totalEpics: epics.length,
+    totalEpics: 0,
     totalStories: stories.length,
     updatedCount: 0,
     createdCount: 0,
@@ -785,7 +823,10 @@ export async function syncToJira(projectRoot, customConfig = {}, req = null) {
     }
   }
 
-  // 2. Process Epics (Upsert)
+  const pushEpics = Boolean(config.pushEpics) && epics.length > 0 && stories.length === 0;
+
+  // 2. Process Epics (Upsert) — off by default; stories map 1:1 to JIRA tickets
+  if (pushEpics) {
   for (const [i, ep] of epics.entries()) {
     const epicNumStr = String(ep.epicNum || i + 1);
     const existingKey = mapping.epics[epicNumStr] || existingJiraEpics.get(epicNumStr);
@@ -888,6 +929,7 @@ export async function syncToJira(projectRoot, customConfig = {}, req = null) {
       status: isUpdate ? 'Updated (JIRA Sandbox)' : 'Created (JIRA Sandbox)',
       url: `${domain}/browse/${itemKey}`,
     });
+  }
   }
 
   // 3. Process Stories (Upsert)
@@ -1044,7 +1086,7 @@ export async function syncToJira(projectRoot, customConfig = {}, req = null) {
 
   persistAtlassianSession(projectRoot, { ...config, connected: true });
 
-  return syncResults;
+  return { ...syncResults, mapping };
 }
 
 /**
@@ -1055,12 +1097,17 @@ export async function syncToJira(projectRoot, customConfig = {}, req = null) {
  *  - If new: creates new spec-X-Y.md file with status: In Review and links into epics.md
  */
 export async function pullFromJira(projectRoot, customConfig = {}, req = null) {
+  const split = splitAtlassianPayload(customConfig);
   const { workspaceFiles, configFields, useWorkspace } = await resolveWorkspace(projectRoot, customConfig, req);
   const config = { ...getAtlassianConfig(projectRoot), ...configFields };
-  const mapping = getAtlassianMapping(projectRoot);
-  const localData = useWorkspace
+  const mapping = mergeClientMapping(projectRoot, split.clientMapping);
+  const localDiscovered = useWorkspace
     ? discoverStoriesAndEpicsFromWorkspace(workspaceFiles)
     : discoverStoriesAndEpics(projectRoot);
+  const localData = {
+    epics: localDiscovered.epics || [],
+    stories: filterJiraStorySpecs(localDiscovered.stories || []),
+  };
 
   const isLive = Boolean(config.domain && config.email && config.apiToken && !config.isDemoMode);
   const domain = (config.domain || '').replace(/\/+$/, '');
@@ -1355,7 +1402,7 @@ export async function pullFromJira(projectRoot, customConfig = {}, req = null) {
     summary: `Pulled ${pullResults.items.length} stories from JIRA (${pullResults.updatedCount} changed set to 'In Review', ${pullResults.createdCount} created, ${pullResults.unchangedCount} unchanged preserved).`,
   });
 
-  return pullResults;
+  return { ...pullResults, mapping };
 }
 
 function updateStoryFileFrontmatter(filePath, updates = {}) {
@@ -1792,12 +1839,14 @@ function slugify(text) {
  * or creates new pages via POST if they do not exist yet.
  */
 export async function syncToConfluence(projectRoot, customConfig = {}, req = null) {
+  const split = splitAtlassianPayload(customConfig);
   const { workspaceFiles, configFields, useWorkspace } = await resolveWorkspace(projectRoot, customConfig, req);
   const config = { ...getAtlassianConfig(projectRoot), ...configFields };
-  const mapping = getAtlassianMapping(projectRoot);
-  const deliverables = useWorkspace
+  const mapping = mergeClientMapping(projectRoot, split.clientMapping);
+  const rawDeliverables = useWorkspace
     ? discoverDeliverablesFromWorkspace(workspaceFiles, mapping)
     : discoverDeliverables(projectRoot);
+  const deliverables = filterConfluencePhaseDeliverables(rawDeliverables);
   if (!mapping.confluence) mapping.confluence = {};
 
   const isLive = Boolean(config.domain && config.email && config.apiToken && !config.isDemoMode);
@@ -2014,7 +2063,7 @@ export async function syncToConfluence(projectRoot, customConfig = {}, req = nul
 
   persistAtlassianSession(projectRoot, { ...config, connected: true });
 
-  return syncResults;
+  return { ...syncResults, mapping };
 }
 
 /**
@@ -2025,13 +2074,14 @@ export async function syncToConfluence(projectRoot, customConfig = {}, req = nul
  *  - If new: creates new deliverable file with status: In Review
  */
 export async function pullFromConfluence(projectRoot, customConfig = {}, req = null) {
+  const split = splitAtlassianPayload(customConfig);
   const { workspaceFiles, configFields, useWorkspace } = await resolveWorkspace(projectRoot, customConfig, req);
   const config = { ...getAtlassianConfig(projectRoot), ...configFields };
-  const mapping = getAtlassianMapping(projectRoot);
+  const mapping = mergeClientMapping(projectRoot, split.clientMapping);
   if (!mapping.confluence) mapping.confluence = {};
-  const localDeliverables = useWorkspace
-    ? discoverDeliverablesFromWorkspace(workspaceFiles, mapping)
-    : discoverDeliverables(projectRoot);
+  const localDeliverables = filterConfluencePhaseDeliverables(
+    useWorkspace ? discoverDeliverablesFromWorkspace(workspaceFiles, mapping) : discoverDeliverables(projectRoot),
+  );
 
   const isLive = Boolean(config.domain && config.email && config.apiToken && !config.isDemoMode);
   const domain = (config.domain || '').replace(/\/+$/, '');
@@ -2230,7 +2280,7 @@ export async function pullFromConfluence(projectRoot, customConfig = {}, req = n
     summary: `Pulled ${pullResults.items.length} deliverables from Confluence (${pullResults.updatedCount} changed set to 'In Review', ${pullResults.createdCount} created, ${pullResults.unchangedCount} unchanged preserved).`,
   });
 
-  return pullResults;
+  return { ...pullResults, mapping };
 }
 
 function updateFileFrontmatter(filePath, updates = {}) {

@@ -1,3 +1,62 @@
+function fileStorageKey(f) {
+  return `${f.folderPath || 'root'}::${(f.filename || '').toLowerCase()}`;
+}
+
+function parseStatusFromMarkdown(content) {
+  if (!content) return 'In Review';
+  const m = String(content).match(/^---[\s\S]*?\nstatus:\s*([^\r\n]+)/im);
+  if (!m) return 'In Review';
+  const raw = m[1].trim().replace(/^['"]|['"]$/g, '');
+  if (/approved|accept/i.test(raw)) return 'Approved';
+  if (/reject/i.test(raw)) return 'Rejected';
+  return 'In Review';
+}
+
+function mergeRemoteWithLocalSession(localFiles, remoteFiles) {
+  const remoteMap = new Map((remoteFiles || []).map((f) => [fileStorageKey(f), f]));
+  const merged = [];
+  const seen = new Set();
+
+  for (const lf of localFiles || []) {
+    const key = fileStorageKey(lf);
+    const rf = remoteMap.get(key);
+    seen.add(key);
+    if (!rf) {
+      merged.push(lf);
+      continue;
+    }
+    const localTs = Date.parse(lf.updatedAt || 0) || Number(lf.sessionRevision || 0) || 0;
+    const remoteTs = Date.parse(rf.updatedAt || 0) || 0;
+    const localNewer = localTs > remoteTs + 500;
+    const contentDiffers = (lf.content || '') !== (rf.content || '');
+    if (localNewer || (contentDiffers && localTs >= remoteTs)) {
+      merged.push({
+        ...rf,
+        content: lf.content,
+        status: lf.status || parseStatusFromMarkdown(lf.content),
+        updatedAt: lf.updatedAt || rf.updatedAt,
+        sessionRevision: lf.sessionRevision,
+      });
+    } else {
+      merged.push({
+        ...rf,
+        status: parseStatusFromMarkdown(rf.content) || rf.status,
+      });
+    }
+  }
+
+  for (const rf of remoteFiles || []) {
+    const key = fileStorageKey(rf);
+    if (!seen.has(key)) {
+      merged.push({
+        ...rf,
+        status: parseStatusFromMarkdown(rf.content) || rf.status,
+      });
+    }
+  }
+  return merged;
+}
+
 async function syncFromLiveDisk(quiet = false) {
   if (isSyncing || isSaving || Date.now() - lastSaveTime < 3500) return false;
   isSyncing = true;
@@ -103,7 +162,7 @@ async function syncFromLiveDisk(quiet = false) {
 
         if (hasChanged || files.length === 0) {
           const prevActiveFile = files.find((f) => f.id === activeFileId);
-          files = normIncoming;
+          files = files.length > 0 && !isDirty ? mergeRemoteWithLocalSession(files, normIncoming) : normIncoming;
           try {
             localStorage.setItem('acl_adlc_project_markdown_files', JSON.stringify(files));
           } catch (e) {}
@@ -171,6 +230,7 @@ async function saveCurrentFile() {
   file.content = mergedContent;
   file.status = status === 'Accepted' ? 'Approved' : status;
   file.updatedAt = nowIso;
+  file.sessionRevision = Date.now();
 
   renderPreview();
   persistFilesToBrowserSession();
@@ -312,20 +372,38 @@ function updateDocumentStatusFrontmatter(content, newStatus, nowIso = new Date()
   );
 }
 
+function refreshActiveFileStatusPill(status) {
+  const file = getActiveFile();
+  if (!file) return;
+  const normStatus = status === 'Accepted' || status === 'approved' ? 'Approved' : status;
+  const root = document.getElementById('fileTreeRoot');
+  if (!root) return;
+  const activeItem = root.querySelector(`.file-item[data-file-id="${file.id}"]`);
+  if (!activeItem) return;
+  const pill = activeItem.querySelector('.status-pill');
+  if (!pill) return;
+  pill.className = `status-pill ${normStatus.toLowerCase().replace(/\s+/g, '-')}`;
+  pill.innerHTML = `<span class="dot"></span>${normStatus}`;
+}
+
 async function onStatusChange(newStatus) {
   const file = getActiveFile();
   if (!file) return;
 
   const prevStatus = file.status;
-  file.status = newStatus;
   const nowIso = new Date().toISOString();
+  file.status = newStatus === 'Accepted' ? 'Approved' : newStatus;
   file.updatedAt = nowIso;
+  file.sessionRevision = Date.now();
 
   const currentContent = document.getElementById('markdownTextarea').value || '';
   const updatedContent = updateDocumentStatusFrontmatter(currentContent, newStatus, nowIso);
 
   document.getElementById('markdownTextarea').value = updatedContent;
   file.content = updatedContent;
+  persistFilesToBrowserSession();
+  refreshActiveFileStatusPill(newStatus);
+  renderFileTree();
 
   const ok = await saveCurrentFile();
   if (ok === false) {
@@ -337,23 +415,11 @@ async function onStatusChange(newStatus) {
     renderFileTree();
     return;
   }
-
-  // Update status pill on active file in sidebar
-  const root = document.getElementById('fileTreeRoot');
-  if (root) {
-    const activeItem = root.querySelector(`.file-item[data-file-id="${file.id}"]`);
-    if (activeItem) {
-      const pill = activeItem.querySelector('.status-pill');
-      if (pill) {
-        const normStatus = newStatus === 'Accepted' || newStatus === 'approved' ? 'Approved' : newStatus;
-        pill.className = `status-pill ${normStatus.toLowerCase().replace(/\s+/g, '-')}`;
-        pill.innerHTML = `<span class="dot"></span>${normStatus}`;
-      }
-    }
-  }
+  refreshActiveFileStatusPill(file.status);
 }
 
 if (typeof window !== 'undefined') {
+  window.parseStatusFromMarkdown = parseStatusFromMarkdown;
   window.saveCurrentFile = saveCurrentFile;
   window.onStatusChange = onStatusChange;
   window.syncFromLiveDisk = syncFromLiveDisk;

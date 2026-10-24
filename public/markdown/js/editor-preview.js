@@ -25,9 +25,16 @@ function loadFile(id, openFolder = false) {
     renderFileTree();
   }
 
+  const parsedStatus =
+    typeof parseStatusFromMarkdown === 'function'
+      ? parseStatusFromMarkdown(file.content)
+      : file.status || 'In Review';
+  file.status = parsedStatus || file.status || 'In Review';
+
   const statusSelect = document.getElementById('statusSelect');
   statusSelect.disabled = false;
-  statusSelect.value = file.status === 'Accepted' ? 'Approved' : file.status;
+  const norm = file.status === 'Accepted' ? 'Approved' : file.status;
+  statusSelect.value = norm === 'Approved' || norm === 'Rejected' || norm === 'In Review' ? norm : 'In Review';
 
   const textarea = document.getElementById('markdownTextarea');
   textarea.readOnly = false;

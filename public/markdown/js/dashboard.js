@@ -1743,6 +1743,63 @@ function readAtlassianClientConfig() {
   }
 }
 
+function readAtlassianClientMapping() {
+  try {
+    const raw = localStorage.getItem('__acl_atlassian_mapping__');
+    return raw ? JSON.parse(raw) : { epics: {}, stories: {}, confluence: {} };
+  } catch {
+    return { epics: {}, stories: {}, confluence: {} };
+  }
+}
+
+function writeAtlassianClientMapping(mapping) {
+  if (!mapping) return;
+  try {
+    localStorage.setItem('__acl_atlassian_mapping__', JSON.stringify(mapping));
+  } catch (e) {}
+}
+
+function readLocalAtlassianHistory() {
+  try {
+    return JSON.parse(localStorage.getItem('__acl_atlassian_sync_history__') || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function pushLocalAtlassianHistory(entry) {
+  const list = readLocalAtlassianHistory();
+  list.unshift({ id: 'hist-' + Date.now(), timestamp: new Date().toISOString(), ...entry });
+  try {
+    localStorage.setItem('__acl_atlassian_sync_history__', JSON.stringify(list.slice(0, 40)));
+  } catch (e) {}
+}
+
+function mergeAtlassianHistory(serverHist, localHist) {
+  const map = new Map();
+  for (const e of [...(serverHist || []), ...(localHist || [])]) {
+    if (!e) continue;
+    map.set(String(e.id || e.timestamp) + (e.action || ''), e);
+  }
+  return Array.from(map.values())
+    .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))
+    .slice(0, 40);
+}
+
+function recordAtlassianSyncResult(result, actionLabel) {
+  if (!result || result.success === false) return;
+  if (result.mapping) writeAtlassianClientMapping(result.mapping);
+  pushLocalAtlassianHistory({
+    action: actionLabel,
+    mode: result.mode,
+    summary:
+      result.summary ||
+      `${actionLabel}: ${result.updatedCount || 0} updated, ${result.createdCount || 0} created`,
+    totalStories: result.totalStories,
+    totalPages: result.totalPages,
+  });
+}
+
 function getAtlassianWorkspaceFiles() {
   try {
     let src = [];
@@ -1824,7 +1881,13 @@ async function ensureAtlassianWorkspaceFiles() {
 async function atlassianApiPayloadAsync(extra = {}) {
   const stored = readAtlassianClientConfig();
   const workspaceFiles = await ensureAtlassianWorkspaceFiles();
-  return { ...stored, ...githubSyncContext(), ...extra, workspaceFiles };
+  return {
+    ...stored,
+    ...githubSyncContext(),
+    ...extra,
+    workspaceFiles,
+    clientMapping: readAtlassianClientMapping(),
+  };
 }
 
 function applyAtlassianClientFiles(clientFiles) {
@@ -1842,11 +1905,18 @@ function applyAtlassianClientFiles(clientFiles) {
     const folderPath = parts.length ? parts.join('/') : 'root';
     const id = rel.replace(/[^a-zA-Z0-9_-]/g, '_');
 
+    const pulledStatus =
+      typeof window.parseStatusFromMarkdown === 'function'
+        ? window.parseStatusFromMarkdown(item.content)
+        : 'In Review';
+
     const idx = files.findIndex((f) => f.filename === filename && (f.folderPath || 'root') === folderPath);
     const now = new Date().toISOString();
     if (idx >= 0) {
       files[idx].content = item.content;
+      files[idx].status = pulledStatus;
       files[idx].updatedAt = now;
+      files[idx].sessionRevision = Date.now();
       changed = true;
     } else {
       files.push({
@@ -1854,9 +1924,10 @@ function applyAtlassianClientFiles(clientFiles) {
         filename,
         folderPath,
         content: item.content,
-        status: 'In Review',
+        status: pulledStatus,
         createdAt: now,
         updatedAt: now,
+        sessionRevision: Date.now(),
       });
       changed = true;
     }
@@ -1867,6 +1938,9 @@ function applyAtlassianClientFiles(clientFiles) {
       localStorage.setItem('acl_adlc_project_markdown_files', JSON.stringify(files));
     } catch (e) {}
     if (typeof renderFileTree === 'function') renderFileTree();
+    if (typeof loadFile === 'function' && typeof activeFileId !== 'undefined' && activeFileId) {
+      loadFile(activeFileId);
+    }
   }
   return changed;
 }
@@ -1905,9 +1979,14 @@ async function renderAtlassianSuite(isPushed) {
   `;
 
   try {
+    const discoverPayload = await atlassianApiPayloadAsync();
     const [cfgResRaw, discResRaw, histResRaw] = await Promise.all([
       safeFetchJson('/api/atlassian-config'),
-      safeFetchJson('/api/atlassian-discover'),
+      safeFetchJson('/api/atlassian-discover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(discoverPayload),
+      }),
       safeFetchJson('/api/atlassian-sync-history'),
     ]);
 
@@ -1919,11 +1998,14 @@ async function renderAtlassianSuite(isPushed) {
       } catch (e) {}
     }
     const discRes = discResRaw.ok ? discResRaw.data : { epics: [], stories: [], deliverables: [] };
-    const histRes = histResRaw.ok && Array.isArray(histResRaw.data) ? histResRaw.data : [];
+    const histRes = mergeAtlassianHistory(
+      histResRaw.ok && Array.isArray(histResRaw.data) ? histResRaw.data : [],
+      readLocalAtlassianHistory(),
+    );
 
-    const epicsCount = (discRes.epics || []).length;
-    const storiesCount = (discRes.stories || []).length;
-    const deliverablesCount = (discRes.deliverables || []).length;
+    const epicsCount = 0;
+    const storiesCount = discRes.storyCount || (discRes.stories || []).length;
+    const deliverablesCount = discRes.deliverableCount || (discRes.deliverables || []).length;
     const isConnected = Boolean(cfgRes.connected && cfgRes.domain && cfgRes.email);
     const isDemo = Boolean(cfgRes.isDemoMode);
 
@@ -2238,8 +2320,9 @@ window.executeJiraSync = async function () {
     });
     const result = res.data;
     if (res.ok && result && result.success) {
+      recordAtlassianSyncResult(result, 'JIRA Epics & Stories Sync (Push)');
       displaySyncResultBanner(
-        `🎯 Successfully synced ${result.totalEpics} Epics and ${result.totalStories} Stories to JIRA (${result.projectKey})!`,
+        `🎯 Successfully synced ${result.totalStories} story file(s) to JIRA (${result.projectKey}) — in-place updates, no duplicates.`,
         'jira',
       );
       renderAtlassianSuite(true);
@@ -2277,9 +2360,11 @@ window.executeJiraPull = async function () {
     });
     const result = res.data;
     if (res.ok && result && result.success) {
+      if (result.mapping) writeAtlassianClientMapping(result.mapping);
       if (result.clientFiles && result.clientFiles.length > 0) {
         applyAtlassianClientFiles(result.clientFiles);
       }
+      recordAtlassianSyncResult(result, 'JIRA Stories Pull (Fetch)');
       let bannerMsg = '';
       if (result.updatedCount === 0 && result.createdCount === 0) {
         bannerMsg =
@@ -2349,6 +2434,8 @@ window.executeConfluenceSync = async function () {
     });
     const result = res.data;
     if (res.ok && result && result.success) {
+      recordAtlassianSyncResult(result, 'Confluence Documentation Sync (Push)');
+      if (result.mapping) writeAtlassianClientMapping(result.mapping);
       const detailMsg =
         result.updatedCount !== undefined
           ? `(${result.updatedCount} updated in-place, ${result.createdCount} published - no duplicates!)`
@@ -2392,9 +2479,11 @@ window.executeConfluencePull = async function () {
     });
     const result = res.data;
     if (res.ok && result && result.success) {
+      if (result.mapping) writeAtlassianClientMapping(result.mapping);
       if (result.clientFiles && result.clientFiles.length > 0) {
         applyAtlassianClientFiles(result.clientFiles);
       }
+      recordAtlassianSyncResult(result, 'Confluence Documentation Pull (Fetch)');
       let bannerMsg = '';
       if (result.updatedCount === 0 && result.createdCount === 0) {
         bannerMsg =

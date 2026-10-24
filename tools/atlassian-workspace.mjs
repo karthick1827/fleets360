@@ -8,10 +8,19 @@ export function isServerlessRuntime() {
 }
 
 export function splitAtlassianPayload(customConfig = {}) {
-  const { workspaceFiles, githubOwner, githubRepo, githubBranch, githubToken, ...configFields } = customConfig;
+  const {
+    workspaceFiles,
+    clientMapping,
+    githubOwner,
+    githubRepo,
+    githubBranch,
+    githubToken,
+    ...configFields
+  } = customConfig;
   const files = Array.isArray(workspaceFiles) ? workspaceFiles : [];
   return {
     workspaceFiles: files,
+    clientMapping: clientMapping && typeof clientMapping === 'object' ? clientMapping : null,
     configFields,
     useWorkspace: files.length > 0,
     githubOwner,
@@ -150,6 +159,24 @@ export function parseStoryFromContent(raw, filename, filePath, results) {
   });
 }
 
+/** One JIRA ticket per story id — implementation spec/story markdown only. */
+export function filterJiraStorySpecs(stories) {
+  const byId = new Map();
+  for (const s of stories || []) {
+    const fn = (s.filename || '').toLowerCase();
+    if (!fn.startsWith('spec-') && !fn.startsWith('story-')) continue;
+    const id = String(s.storyId || '').trim();
+    if (!id) continue;
+    const prev = byId.get(id);
+    if (!prev || (s.rawContent || '').length > (prev.rawContent || '').length) {
+      byId.set(id, s);
+    }
+  }
+  return Array.from(byId.values()).sort((a, b) =>
+    String(a.storyId).localeCompare(String(b.storyId), undefined, { numeric: true }),
+  );
+}
+
 export function discoverStoriesAndEpicsFromWorkspace(workspaceFiles) {
   const results = { epics: [], stories: [] };
   for (const f of workspaceFiles) {
@@ -192,6 +219,22 @@ const DOC_MAP = [
   { pattern: /^experience\.md$/i, type: 'Phase 2 · User Experience', defaultTitle: 'User Experience & Interaction Spec' },
   { pattern: /^project-context\.md$/i, type: 'Project Context', defaultTitle: 'Project Context' },
 ];
+
+/** Canonical phase docs only — no duplicate brief/prd paths. */
+export function filterConfluencePhaseDeliverables(deliverables) {
+  const bySlot = new Map();
+  for (const d of deliverables || []) {
+    const name = (d.filename || '').toLowerCase();
+    const target = DOC_MAP.find((t) => t.pattern.test(name));
+    if (!target && !d.confluencePageId) continue;
+    const slot = target ? target.defaultTitle : name;
+    const prev = bySlot.get(slot);
+    if (!prev || (d.content || '').length > (prev.content || '').length) {
+      bySlot.set(slot, d);
+    }
+  }
+  return Array.from(bySlot.values());
+}
 
 const EXCLUDED_CHILD_NAMES = new Set([
   'skill.md',

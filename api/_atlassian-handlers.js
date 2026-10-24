@@ -72,16 +72,14 @@ export async function handleConfig(req, res) {
 export async function handleDiscover(req, res) {
   if (req.method === 'OPTIONS') return reply(res, 200, '');
   const projectRoot = process.cwd();
-  if (req.method !== 'GET') return reply(res, 405, { error: 'Method Not Allowed' });
-  const stories = atlassianMod.discoverStoriesAndEpics(projectRoot);
-  const deliverables = atlassianMod.discoverDeliverables(projectRoot);
-  const history = atlassianMod.getSyncHistory(projectRoot);
-  return reply(res, 200, {
-    stories: stories.stories || [],
-    epics: stories.epics || [],
-    deliverables,
-    history,
-  });
+  if (req.method !== 'GET' && req.method !== 'POST') return reply(res, 405, { error: 'Method Not Allowed' });
+  const payload = req.method === 'POST' ? await readJsonBody(req) : {};
+  try {
+    const discovered = await atlassianMod.discoverWorkspace(projectRoot, payload, req);
+    return reply(res, 200, discovered);
+  } catch (err) {
+    return reply(res, 400, { success: false, error: err.message });
+  }
 }
 
 function atlassianActionReply(res, result, err) {
