@@ -1743,9 +1743,75 @@ function readAtlassianClientConfig() {
   }
 }
 
+function getAtlassianWorkspaceFiles() {
+  try {
+    let src = [];
+    if (typeof files !== 'undefined' && Array.isArray(files) && files.length > 0) {
+      src = files;
+    } else if (Array.isArray(window.__ACL_EMBEDDED_FILES__) && window.__ACL_EMBEDDED_FILES__.length > 0) {
+      src = window.__ACL_EMBEDDED_FILES__;
+    } else {
+      const raw = localStorage.getItem('acl_adlc_project_markdown_files');
+      if (raw) src = JSON.parse(raw);
+    }
+    return (src || []).map((f) => ({
+      filename: f.filename,
+      folderPath: f.folderPath,
+      content: f.content,
+      status: f.status,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 function atlassianApiPayload(extra = {}) {
   const stored = readAtlassianClientConfig();
-  return { ...stored, ...extra };
+  return { ...stored, ...extra, workspaceFiles: getAtlassianWorkspaceFiles() };
+}
+
+function applyAtlassianClientFiles(clientFiles) {
+  if (!Array.isArray(clientFiles) || clientFiles.length === 0) return false;
+  if (typeof files === 'undefined') return false;
+
+  const normPath = (rel) => String(rel || '').replace(/\\/g, '/').replace(/^_acl-output\/?/, '');
+  let changed = false;
+
+  for (const item of clientFiles) {
+    if (!item || !item.content) continue;
+    const rel = normPath(item.relativePath);
+    const parts = rel.split('/').filter(Boolean);
+    const filename = parts.pop() || 'document.md';
+    const folderPath = parts.length ? parts.join('/') : 'root';
+    const id = rel.replace(/[^a-zA-Z0-9_-]/g, '_');
+
+    const idx = files.findIndex((f) => f.filename === filename && (f.folderPath || 'root') === folderPath);
+    const now = new Date().toISOString();
+    if (idx >= 0) {
+      files[idx].content = item.content;
+      files[idx].updatedAt = now;
+      changed = true;
+    } else {
+      files.push({
+        id,
+        filename,
+        folderPath,
+        content: item.content,
+        status: 'In Review',
+        createdAt: now,
+        updatedAt: now,
+      });
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    try {
+      localStorage.setItem('acl_adlc_project_markdown_files', JSON.stringify(files));
+    } catch (e) {}
+    if (typeof renderFileTree === 'function') renderFileTree();
+  }
+  return changed;
 }
 
 async function safeFetchJson(url, options = {}) {
@@ -2114,14 +2180,19 @@ window.executeJiraSync = async function () {
       body: JSON.stringify(atlassianApiPayload()),
     });
     const result = res.data;
-    if (res.ok && result.success) {
+    if (res.ok && result && result.success) {
       displaySyncResultBanner(
         `🎯 Successfully synced ${result.totalEpics} Epics and ${result.totalStories} Stories to JIRA (${result.projectKey})!`,
         'jira',
       );
       renderAtlassianSuite(true);
     } else {
-      alert('⚠️ JIRA Sync error: ' + (result.error || 'Failed to sync'));
+      const err =
+        (result && result.error) ||
+        (result && result.message) ||
+        (!res.ok ? 'HTTP ' + res.status : '') ||
+        'Failed to sync';
+      alert('⚠️ JIRA Sync error: ' + err);
     }
   } catch (err) {
     alert('⚠️ Network error during JIRA sync: ' + err.message);
@@ -2148,7 +2219,10 @@ window.executeJiraPull = async function () {
       body: JSON.stringify(atlassianApiPayload()),
     });
     const result = res.data;
-    if (res.ok && result.success) {
+    if (res.ok && result && result.success) {
+      if (result.clientFiles && result.clientFiles.length > 0) {
+        applyAtlassianClientFiles(result.clientFiles);
+      }
       let bannerMsg = '';
       if (result.updatedCount === 0 && result.createdCount === 0) {
         bannerMsg =
@@ -2167,16 +2241,24 @@ window.executeJiraPull = async function () {
           (result.unchangedCount || 0) +
           ' unchanged stories kept untouched)';
       }
+      if (result.clientFiles && result.clientFiles.length > 0) {
+        bannerMsg += ' Updated ' + result.clientFiles.length + ' file(s) in this browser session.';
+      }
       displaySyncResultBanner(bannerMsg, 'jira');
       renderAtlassianSuite(true);
-      if (typeof window.syncFromLiveDisk === 'function') {
+      if (typeof window.syncFromLiveDisk === 'function' && !(result.clientFiles && result.clientFiles.length > 0)) {
         await window.syncFromLiveDisk(false);
       }
       if (typeof loadFile === 'function' && typeof activeFileId !== 'undefined' && activeFileId) {
         loadFile(activeFileId);
       }
     } else {
-      alert('⚠️ JIRA Pull error: ' + (result.error || 'Failed to pull from JIRA'));
+      const err =
+        (result && result.error) ||
+        (result && result.message) ||
+        (!res.ok ? 'HTTP ' + res.status : '') ||
+        'Failed to pull from JIRA';
+      alert('⚠️ JIRA Pull error: ' + err);
     }
   } catch (err) {
     alert('⚠️ Network error during JIRA pull: ' + err.message);
@@ -2209,7 +2291,7 @@ window.executeConfluenceSync = async function () {
       body: JSON.stringify(atlassianApiPayload()),
     });
     const result = res.data;
-    if (res.ok && result.success) {
+    if (res.ok && result && result.success) {
       const detailMsg =
         result.updatedCount !== undefined
           ? `(${result.updatedCount} updated in-place, ${result.createdCount} published - no duplicates!)`
@@ -2220,7 +2302,12 @@ window.executeConfluenceSync = async function () {
       );
       renderAtlassianSuite(true);
     } else {
-      alert('⚠️ Confluence Sync error: ' + (result.error || 'Failed to sync'));
+      const err =
+        (result && result.error) ||
+        (result && result.message) ||
+        (!res.ok ? 'HTTP ' + res.status : '') ||
+        'Failed to sync';
+      alert('⚠️ Confluence Sync error: ' + err);
     }
   } catch (err) {
     alert('⚠️ Network error during Confluence sync: ' + err.message);
@@ -2247,7 +2334,10 @@ window.executeConfluencePull = async function () {
       body: JSON.stringify(atlassianApiPayload()),
     });
     const result = res.data;
-    if (res.ok && result.success) {
+    if (res.ok && result && result.success) {
+      if (result.clientFiles && result.clientFiles.length > 0) {
+        applyAtlassianClientFiles(result.clientFiles);
+      }
       let bannerMsg = '';
       if (result.updatedCount === 0 && result.createdCount === 0) {
         bannerMsg =
@@ -2266,16 +2356,24 @@ window.executeConfluencePull = async function () {
           (result.unchangedCount || 0) +
           ' unchanged kept untouched)';
       }
+      if (result.clientFiles && result.clientFiles.length > 0) {
+        bannerMsg += ' Updated ' + result.clientFiles.length + ' file(s) in this browser session.';
+      }
       displaySyncResultBanner(bannerMsg, 'confluence');
       renderAtlassianSuite(true);
-      if (typeof window.syncFromLiveDisk === 'function') {
+      if (typeof window.syncFromLiveDisk === 'function' && !(result.clientFiles && result.clientFiles.length > 0)) {
         await window.syncFromLiveDisk(false);
       }
       if (typeof loadFile === 'function' && typeof activeFileId !== 'undefined' && activeFileId) {
         loadFile(activeFileId);
       }
     } else {
-      alert('⚠️ Confluence Pull error: ' + (result.error || 'Failed to pull from Confluence'));
+      const err =
+        (result && result.error) ||
+        (result && result.message) ||
+        (!res.ok ? 'HTTP ' + res.status : '') ||
+        'Failed to pull from Confluence';
+      alert('⚠️ Confluence Pull error: ' + err);
     }
   } catch (err) {
     alert('⚠️ Network error during Confluence pull: ' + err.message);

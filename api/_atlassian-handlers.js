@@ -10,8 +10,24 @@ const corsHeaders = {
 
 function readJsonBody(req) {
   return new Promise((resolve) => {
-    if (req.body && typeof req.body === 'object') {
-      return resolve(req.body);
+    if (req.body !== undefined && req.body !== null) {
+      if (typeof req.body === 'string') {
+        try {
+          return resolve(JSON.parse(req.body || '{}'));
+        } catch {
+          return resolve({});
+        }
+      }
+      if (typeof Buffer !== 'undefined' && Buffer.isBuffer(req.body)) {
+        try {
+          return resolve(JSON.parse(req.body.toString('utf8') || '{}'));
+        } catch {
+          return resolve({});
+        }
+      }
+      if (typeof req.body === 'object') {
+        return resolve(req.body);
+      }
     }
     let body = '';
     req.on('data', (chunk) => {

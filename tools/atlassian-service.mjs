@@ -6,6 +6,14 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import {
+  discoverDeliverablesFromWorkspace,
+  discoverStoriesAndEpicsFromWorkspace,
+  isServerlessRuntime,
+  queueClientMarkdown,
+  splitAtlassianPayload,
+  workspaceRelativePath,
+} from './atlassian-workspace.mjs';
 
 function getAclFilePath(projectRoot, filename, forWrite = false) {
   const primaryPath = path.join(projectRoot, '_acl', filename);
@@ -678,14 +686,45 @@ export async function fetchJiraIssues(config) {
  * Updates existing tickets in-place via PUT to prevent duplicates,
  * or creates new tickets via POST if they do not exist yet.
  */
+function persistAtlassianSession(projectRoot, config) {
+  const snapshot = {
+    ...config,
+    connected: Boolean(config.connected),
+    lastSynced: new Date().toISOString(),
+  };
+  try {
+    safeWriteAclJson(projectRoot, 'atlassian-config.json', snapshot);
+  } catch {
+    // Serverless: credentials live in the browser; skip disk errors.
+  }
+}
+
 export async function syncToJira(projectRoot, customConfig = {}) {
-  const config = { ...getAtlassianConfig(projectRoot), ...customConfig };
-  const { epics, stories } = discoverStoriesAndEpics(projectRoot);
+  const { workspaceFiles, configFields, useWorkspace } = splitAtlassianPayload(customConfig);
+  const config = { ...getAtlassianConfig(projectRoot), ...configFields };
+  const { epics, stories } = useWorkspace
+    ? discoverStoriesAndEpicsFromWorkspace(workspaceFiles)
+    : discoverStoriesAndEpics(projectRoot);
   const mapping = getAtlassianMapping(projectRoot);
 
   const isLive = Boolean(config.domain && config.email && config.apiToken && !config.isDemoMode);
   const domain = (config.domain || '').replace(/\/+$/, '');
   const projectKey = (config.jiraProjectKey || 'PROJ').toUpperCase();
+
+  if (isLive && (!config.domain || !config.email || !config.apiToken)) {
+    return {
+      success: false,
+      error:
+        'Atlassian credentials were not received by the server. Open Configure Connection, save again, then retry sync.',
+    };
+  }
+  if (isLive && epics.length === 0 && stories.length === 0) {
+    return {
+      success: false,
+      error:
+        'No epics or stories found in your workspace. In Markdown Studio, sync documents from GitHub (or open your specs), then retry JIRA sync.',
+    };
+  }
 
   const syncResults = {
     mode: isLive ? 'live-cloud' : 'simulated-demo',
@@ -984,9 +1023,7 @@ export async function syncToJira(projectRoot, customConfig = {}) {
     summary: `Synced ${syncResults.totalEpics} Epics & ${syncResults.totalStories} Stories (${syncResults.updatedCount} updated in-place, ${syncResults.createdCount} created) without duplicates.`,
   });
 
-  config.lastSynced = new Date().toISOString();
-  config.connected = true;
-  saveAtlassianConfig(projectRoot, config);
+  persistAtlassianSession(projectRoot, { ...config, connected: true });
 
   return syncResults;
 }
@@ -999,13 +1036,24 @@ export async function syncToJira(projectRoot, customConfig = {}) {
  *  - If new: creates new spec-X-Y.md file with status: In Review and links into epics.md
  */
 export async function pullFromJira(projectRoot, customConfig = {}) {
-  const config = { ...getAtlassianConfig(projectRoot), ...customConfig };
+  const { workspaceFiles, configFields, useWorkspace } = splitAtlassianPayload(customConfig);
+  const config = { ...getAtlassianConfig(projectRoot), ...configFields };
   const mapping = getAtlassianMapping(projectRoot);
-  const localData = discoverStoriesAndEpics(projectRoot);
+  const localData = useWorkspace
+    ? discoverStoriesAndEpicsFromWorkspace(workspaceFiles)
+    : discoverStoriesAndEpics(projectRoot);
 
   const isLive = Boolean(config.domain && config.email && config.apiToken && !config.isDemoMode);
   const domain = (config.domain || '').replace(/\/+$/, '');
   const projectKey = (config.jiraProjectKey || 'PROJ').toUpperCase();
+
+  if (isLive && (!config.domain || !config.email || !config.apiToken)) {
+    return {
+      success: false,
+      error:
+        'Atlassian credentials were not received by the server. Open Configure Connection, save again, then retry pull.',
+    };
+  }
 
   const pullResults = {
     mode: isLive ? 'live-cloud' : 'simulated-demo',
@@ -1015,6 +1063,7 @@ export async function pullFromJira(projectRoot, customConfig = {}) {
     createdCount: 0,
     unchangedCount: 0,
     items: [],
+    clientFiles: [],
   };
 
   const auth = isLive ? Buffer.from(`${config.email}:${config.apiToken}`).toString('base64') : '';
@@ -1126,7 +1175,10 @@ export async function pullFromJira(projectRoot, customConfig = {}) {
       existing = localStoriesById.get(storyId) || localStoriesBySlug.get(slugId);
     }
 
-    if (existing && fs.existsSync(existing.filePath)) {
+    const storyFileAvailable =
+      existing && (useWorkspace || isServerlessRuntime() || (existing.filePath && fs.existsSync(existing.filePath)));
+
+    if (storyFileAvailable) {
       // ─────────────────────────────────────────────────────────────────
       // CHECK DELTA: HAS THE STORY CHANGED IN JIRA?
       // ─────────────────────────────────────────────────────────────────
@@ -1173,15 +1225,24 @@ export async function pullFromJira(projectRoot, customConfig = {}) {
         // ───────────────────────────────────────────────────────────────
         // CASE A-1: REAL CHANGES DETECTED -> UPDATE AND SET TO 'In Review'
         // ───────────────────────────────────────────────────────────────
-        updateExistingStoryFile(existing.filePath, {
-          storyId,
-          jiraKey: issue.key,
-          cleanTitle,
-          description: markdownDescription,
-          userStoryText: jiraUserStory,
-          criteria: jiraCriteria,
-          resetStatusToInReview: true,
-        });
+        updateExistingStoryFile(
+          existing.filePath,
+          {
+            storyId,
+            jiraKey: issue.key,
+            cleanTitle,
+            description: markdownDescription,
+            userStoryText: jiraUserStory,
+            criteria: jiraCriteria,
+            resetStatusToInReview: true,
+          },
+          {
+            sourceContent: existing.rawContent,
+            pullResults,
+            relativePath: existing.filePath,
+            clientOnly: useWorkspace || isServerlessRuntime(),
+          },
+        );
 
         pullResults.updatedCount++;
         pullResults.items.push({
@@ -1197,7 +1258,9 @@ export async function pullFromJira(projectRoot, customConfig = {}) {
         // ───────────────────────────────────────────────────────────────
         // CASE A-2: NO CHANGES DETECTED -> PRESERVE LOCAL STATUS (e.g. Approved)
         // ───────────────────────────────────────────────────────────────
-        updateStoryFileFrontmatter(existing.filePath, { jiraKey: issue.key });
+        if (!useWorkspace && !isServerlessRuntime()) {
+          updateStoryFileFrontmatter(existing.filePath, { jiraKey: issue.key });
+        }
 
         pullResults.unchangedCount++;
         pullResults.items.push({
@@ -1218,14 +1281,23 @@ export async function pullFromJira(projectRoot, customConfig = {}) {
       const newFileName = `spec-${slugId}-${safeSlug}.md`;
       const newFilePath = path.join(targetDir, newFileName);
 
-      const created = createNewStoryFile(newFilePath, {
-        storyId,
-        jiraKey: issue.key,
-        title: cleanTitle,
-        description: markdownDescription,
-        userStoryText: jiraUserStory,
-        criteria: jiraCriteria,
-      });
+      const relNew = workspaceRelativePath(path.relative(projectRoot, targetDir).replace(/\\/g, '/'), newFileName);
+      const created = createNewStoryFile(
+        newFilePath,
+        {
+          storyId,
+          jiraKey: issue.key,
+          title: cleanTitle,
+          description: markdownDescription,
+          userStoryText: jiraUserStory,
+          criteria: jiraCriteria,
+        },
+        {
+          pullResults,
+          relativePath: useWorkspace || isServerlessRuntime() ? relNew : newFilePath,
+          clientOnly: useWorkspace || isServerlessRuntime(),
+        },
+      );
 
       if (created) {
         mapping.stories[storyId] = issue.key;
@@ -1297,9 +1369,13 @@ function updateStoryFileFrontmatter(filePath, updates = {}) {
   }
 }
 
-function updateExistingStoryFile(filePath, data) {
+function updateExistingStoryFile(filePath, data, options = {}) {
   try {
-    let content = fs.readFileSync(filePath, 'utf8');
+    let content = options.sourceContent;
+    if (!content && filePath && fs.existsSync(filePath)) {
+      content = fs.readFileSync(filePath, 'utf8');
+    }
+    if (!content) return false;
     const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
     if (!fmMatch) return false;
 
@@ -1366,6 +1442,10 @@ function updateExistingStoryFile(filePath, data) {
     }
 
     content = `---\n${fm.trim()}\n---` + body;
+    if (options.clientOnly && options.pullResults) {
+      queueClientMarkdown(options.pullResults, options.relativePath || filePath, content);
+      return true;
+    }
     fs.writeFileSync(filePath, content, 'utf8');
     return true;
   } catch (err) {
@@ -1374,7 +1454,7 @@ function updateExistingStoryFile(filePath, data) {
   }
 }
 
-function createNewStoryFile(filePath, data) {
+function createNewStoryFile(filePath, data, options = {}) {
   try {
     const today = new Date().toISOString().split('T')[0];
     const epicNum = data.storyId.includes('.') ? data.storyId.split('.')[0] : '1';
@@ -1426,6 +1506,10 @@ ${criteriaLines}
 - ${today}: Story ${data.storyId} imported from JIRA board ticket ${data.jiraKey} (Status: In Review).
 `;
 
+    if (options.clientOnly && options.pullResults) {
+      queueClientMarkdown(options.pullResults, options.relativePath || filePath, fileContent);
+      return true;
+    }
     fs.writeFileSync(filePath, fileContent, 'utf8');
     return true;
   } catch (err) {
@@ -1689,14 +1773,32 @@ function slugify(text) {
  * or creates new pages via POST if they do not exist yet.
  */
 export async function syncToConfluence(projectRoot, customConfig = {}) {
-  const config = { ...getAtlassianConfig(projectRoot), ...customConfig };
-  const deliverables = discoverDeliverables(projectRoot);
+  const { workspaceFiles, configFields, useWorkspace } = splitAtlassianPayload(customConfig);
+  const config = { ...getAtlassianConfig(projectRoot), ...configFields };
   const mapping = getAtlassianMapping(projectRoot);
+  const deliverables = useWorkspace
+    ? discoverDeliverablesFromWorkspace(workspaceFiles, mapping)
+    : discoverDeliverables(projectRoot);
   if (!mapping.confluence) mapping.confluence = {};
 
   const isLive = Boolean(config.domain && config.email && config.apiToken && !config.isDemoMode);
   const domain = (config.domain || '').replace(/\/+$/, '');
   const spaceKey = (config.confluenceSpaceKey || 'DOCS').toUpperCase();
+
+  if (isLive && (!config.domain || !config.email || !config.apiToken)) {
+    return {
+      success: false,
+      error:
+        'Atlassian credentials were not received by the server. Open Configure Connection, save again, then retry sync.',
+    };
+  }
+  if (isLive && deliverables.length === 0) {
+    return {
+      success: false,
+      error:
+        'No phase deliverables found in your workspace. Sync _acl-output from GitHub in Markdown Studio, then retry Confluence sync.',
+    };
+  }
 
   const syncResults = {
     mode: isLive ? 'live-cloud' : 'simulated-demo',
@@ -1890,9 +1992,7 @@ export async function syncToConfluence(projectRoot, customConfig = {}) {
     summary: `Synced ${syncResults.totalPages} deliverables to Confluence space ${spaceKey} (${syncResults.updatedCount} updated in-place, ${syncResults.createdCount} created) without duplicates.`,
   });
 
-  config.lastSynced = new Date().toISOString();
-  config.connected = true;
-  saveAtlassianConfig(projectRoot, config);
+  persistAtlassianSession(projectRoot, { ...config, connected: true });
 
   return syncResults;
 }
@@ -1905,14 +2005,25 @@ export async function syncToConfluence(projectRoot, customConfig = {}) {
  *  - If new: creates new deliverable file with status: In Review
  */
 export async function pullFromConfluence(projectRoot, customConfig = {}) {
-  const config = { ...getAtlassianConfig(projectRoot), ...customConfig };
+  const { workspaceFiles, configFields, useWorkspace } = splitAtlassianPayload(customConfig);
+  const config = { ...getAtlassianConfig(projectRoot), ...configFields };
   const mapping = getAtlassianMapping(projectRoot);
   if (!mapping.confluence) mapping.confluence = {};
-  const localDeliverables = discoverDeliverables(projectRoot);
+  const localDeliverables = useWorkspace
+    ? discoverDeliverablesFromWorkspace(workspaceFiles, mapping)
+    : discoverDeliverables(projectRoot);
 
   const isLive = Boolean(config.domain && config.email && config.apiToken && !config.isDemoMode);
   const domain = (config.domain || '').replace(/\/+$/, '');
   const spaceKey = (config.confluenceSpaceKey || 'DOCS').toUpperCase();
+
+  if (isLive && (!config.domain || !config.email || !config.apiToken)) {
+    return {
+      success: false,
+      error:
+        'Atlassian credentials were not received by the server. Open Configure Connection, save again, then retry pull.',
+    };
+  }
 
   const pullResults = {
     mode: isLive ? 'live-cloud' : 'simulated-demo',
@@ -1922,6 +2033,7 @@ export async function pullFromConfluence(projectRoot, customConfig = {}) {
     createdCount: 0,
     unchangedCount: 0,
     items: [],
+    clientFiles: [],
   };
 
   const auth = isLive ? Buffer.from(`${config.email}:${config.apiToken}`).toString('base64') : '';
@@ -1991,7 +2103,10 @@ export async function pullFromConfluence(projectRoot, customConfig = {}) {
         (d) => page.title.toLowerCase().includes(d.title.toLowerCase()) || d.title.toLowerCase().includes(cleanTitle.toLowerCase()),
       );
 
-    if (existing && fs.existsSync(existing.fullPath)) {
+    const deliverableAvailable =
+      existing && (useWorkspace || isServerlessRuntime() || (existing.fullPath && fs.existsSync(existing.fullPath)));
+
+    if (deliverableAvailable) {
       mapping.confluence[existing.filename] = page.id;
 
       // Delta comparison (strip status: frontmatter line and CRLF to compare true content)
@@ -2021,7 +2136,11 @@ export async function pullFromConfluence(projectRoot, customConfig = {}) {
         const body = extractedFmMatch ? finalContent.slice(extractedFmMatch[0].length) : finalContent;
         finalContent = `---\n${fm.trim()}\n---\n\n` + body.trimStart();
 
-        fs.writeFileSync(existing.fullPath, finalContent, 'utf8');
+        if (useWorkspace || isServerlessRuntime()) {
+          queueClientMarkdown(pullResults, existing.fullPath || existing.relPath, finalContent);
+        } else {
+          fs.writeFileSync(existing.fullPath, finalContent, 'utf8');
+        }
         pullResults.updatedCount++;
         pullResults.items.push({
           id: page.id,
@@ -2033,7 +2152,9 @@ export async function pullFromConfluence(projectRoot, customConfig = {}) {
         });
       } else {
         // CASE A-2: NO CHANGES DETECTED -> PRESERVE CURRENT STATUS (e.g. Approved)
-        updateFileFrontmatter(existing.fullPath, { confluencePageId: page.id });
+        if (!useWorkspace && !isServerlessRuntime()) {
+          updateFileFrontmatter(existing.fullPath, { confluencePageId: page.id });
+        }
         pullResults.unchangedCount++;
         pullResults.items.push({
           id: page.id,
@@ -2047,10 +2168,9 @@ export async function pullFromConfluence(projectRoot, customConfig = {}) {
     } else if (extractedMarkdown && extractedMarkdown.length > 50 && !page.title.startsWith('Template -')) {
       // CASE B: NEW DELIVERABLE PAGE CREATED IN CONFLUENCE
       const safeSlug = slugify(cleanTitle);
-      const targetDir = path.join(projectRoot, '_acl-output', 'planning-artifacts');
-      if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
       const newFileName = `${safeSlug}.md`;
-      const newFilePath = path.join(targetDir, newFileName);
+      const relNew = workspaceRelativePath('planning-artifacts', newFileName);
+      const newFilePath = path.join(projectRoot, relNew);
 
       let finalContent = extractedMarkdown;
       if (!finalContent.startsWith('---')) {
@@ -2059,7 +2179,13 @@ export async function pullFromConfluence(projectRoot, customConfig = {}) {
           finalContent;
       }
 
-      fs.writeFileSync(newFilePath, finalContent, 'utf8');
+      if (useWorkspace || isServerlessRuntime()) {
+        queueClientMarkdown(pullResults, relNew, finalContent);
+      } else {
+        const targetDir = path.dirname(newFilePath);
+        if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+        fs.writeFileSync(newFilePath, finalContent, 'utf8');
+      }
       mapping.confluence[newFileName] = page.id;
 
       pullResults.createdCount++;
