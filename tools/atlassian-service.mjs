@@ -7,9 +7,55 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+function getAclFilePath(projectRoot, filename, forWrite = false) {
+  const primaryPath = path.join(projectRoot, '_acl', filename);
+  if (!forWrite) {
+    const tmpPath = path.join('/tmp', '_acl', filename);
+    if ((process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) && fs.existsSync(tmpPath)) {
+      return tmpPath;
+    }
+    if (fs.existsSync(primaryPath)) {
+      return primaryPath;
+    }
+    if (fs.existsSync(tmpPath)) {
+      return tmpPath;
+    }
+    return primaryPath;
+  }
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    const tmpPath = path.join('/tmp', '_acl', filename);
+    const tmpDir = path.dirname(tmpPath);
+    if (!fs.existsSync(tmpDir)) {
+      try { fs.mkdirSync(tmpDir, { recursive: true }); } catch {}
+    }
+    return tmpPath;
+  }
+  return primaryPath;
+}
+
+function safeWriteAclJson(projectRoot, filename, data) {
+  const targetPath = getAclFilePath(projectRoot, filename, true);
+  try {
+    const dir = path.dirname(targetPath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(targetPath, JSON.stringify(data, null, 2), 'utf8');
+    return true;
+  } catch (err) {
+    try {
+      const tmpPath = path.join('/tmp', '_acl', filename);
+      const tmpDir = path.dirname(tmpPath);
+      if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+      fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf8');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+
 export function getAtlassianConfig(projectRoot) {
-  const aclDir = path.join(projectRoot, '_acl');
-  const configPath = path.join(aclDir, 'atlassian-config.json');
+  const configPath = getAclFilePath(projectRoot, 'atlassian-config.json', false);
 
   const defaultProjectKey =
     path
@@ -177,7 +223,7 @@ export async function saveAtlassianConfig(projectRoot, config) {
       connected: false,
       lastSynced: null,
     };
-    fs.writeFileSync(configPath, JSON.stringify(cleared, null, 2), 'utf8');
+    safeWriteAclJson(projectRoot, 'atlassian-config.json', cleared);
     return cleared;
   }
 
@@ -190,7 +236,7 @@ export async function saveAtlassianConfig(projectRoot, config) {
         connected: false,
         lastError: validation.error,
       };
-      fs.writeFileSync(configPath, JSON.stringify(disconnectedState, null, 2), 'utf8');
+      safeWriteAclJson(projectRoot, 'atlassian-config.json', disconnectedState);
     } catch {
       // ignore write errors when disconnected
     }
@@ -202,12 +248,12 @@ export async function saveAtlassianConfig(projectRoot, config) {
     connected: true,
     lastError: null,
   };
-  fs.writeFileSync(configPath, JSON.stringify(payloadToSave, null, 2), 'utf8');
+  safeWriteAclJson(projectRoot, 'atlassian-config.json', payloadToSave);
   return payloadToSave;
 }
 
 export function getAtlassianMapping(projectRoot) {
-  const mapPath = path.join(projectRoot, '_acl', 'atlassian-mapping.json');
+  const mapPath = getAclFilePath(projectRoot, 'atlassian-mapping.json', false);
   if (fs.existsSync(mapPath)) {
     try {
       const parsed = JSON.parse(fs.readFileSync(mapPath, 'utf8'));
@@ -224,17 +270,12 @@ export function getAtlassianMapping(projectRoot) {
 }
 
 export function saveAtlassianMapping(projectRoot, mapping) {
-  const aclDir = path.join(projectRoot, '_acl');
-  if (!fs.existsSync(aclDir)) {
-    fs.mkdirSync(aclDir, { recursive: true });
-  }
-  const mapPath = path.join(aclDir, 'atlassian-mapping.json');
-  fs.writeFileSync(mapPath, JSON.stringify(mapping, null, 2), 'utf8');
+  safeWriteAclJson(projectRoot, 'atlassian-mapping.json', mapping);
   return mapping;
 }
 
 export function getSyncHistory(projectRoot) {
-  const historyPath = path.join(projectRoot, '_acl', 'atlassian-sync-history.json');
+  const historyPath = getAclFilePath(projectRoot, 'atlassian-sync-history.json', false);
   if (fs.existsSync(historyPath)) {
     try {
       return JSON.parse(fs.readFileSync(historyPath, 'utf8'));
@@ -246,19 +287,13 @@ export function getSyncHistory(projectRoot) {
 }
 
 export function recordSyncHistory(projectRoot, entry) {
-  const aclDir = path.join(projectRoot, '_acl');
-  if (!fs.existsSync(aclDir)) {
-    fs.mkdirSync(aclDir, { recursive: true });
-  }
-  const historyPath = path.join(aclDir, 'atlassian-sync-history.json');
   const history = getSyncHistory(projectRoot);
   history.unshift({
     id: 'sync-' + Date.now(),
     timestamp: new Date().toISOString(),
     ...entry,
   });
-  // Keep last 40 sync runs
-  fs.writeFileSync(historyPath, JSON.stringify(history.slice(0, 40), null, 2), 'utf8');
+  safeWriteAclJson(projectRoot, 'atlassian-sync-history.json', history.slice(0, 40));
 }
 
 /**
