@@ -1,6 +1,9 @@
 ---
-jira_key: EW-114
 status: Approved
+reviewed_by: Manager (via Markdown Studio)
+review_timestamp: 2026-10-24T20:42:32.678Z
+gate_signature: ACL-STUDIO-APPROVAL-APPROVED
+jira_key: EW-114
 title: Profile settings page (Story 4.3)
 type: feature
 created: 2026-09-16
