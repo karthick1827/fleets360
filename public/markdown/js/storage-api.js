@@ -150,31 +150,39 @@ async function syncFromLiveDisk(quiet = false) {
 
 let activeWorkflowMode = localStorage.getItem('acl_workflow_mode') || 'greenfield';
 
+function persistFilesToBrowserSession() {
+  try {
+    localStorage.setItem('acl_adlc_project_markdown_files', JSON.stringify(files));
+  } catch (e) {}
+}
+
 async function saveCurrentFile() {
   const file = getActiveFile();
   if (!file) return;
 
-  const content = document.getElementById('markdownTextarea').value;
+  const textarea = document.getElementById('markdownTextarea');
   const status = document.getElementById('statusSelect').value;
   const nowIso = new Date().toISOString();
 
-  file.content = content;
-  file.status = status;
+  const rawContent = textarea ? textarea.value : file.content || '';
+  const mergedContent = updateDocumentStatusFrontmatter(rawContent, status, nowIso);
+  if (textarea) textarea.value = mergedContent;
+
+  file.content = mergedContent;
+  file.status = status === 'Accepted' ? 'Approved' : status;
   file.updatedAt = nowIso;
 
   renderPreview();
-  try {
-    localStorage.setItem('acl_adlc_project_markdown_files', JSON.stringify(files));
-  } catch (e) {}
+  persistFilesToBrowserSession();
 
-  // Save to disk locally or commit to GitHub if hosted on Vercel
+  const cloudToken = (localStorage.getItem('acl_github_token') || '').trim();
+  const cloudOwner = (localStorage.getItem('acl_github_owner') || '').trim();
+  const cloudRepo = (localStorage.getItem('acl_github_repo') || '').trim();
+  const cloudBranch = (localStorage.getItem('acl_github_branch') || '').trim();
+
+  let resData = { success: true, mode: 'browser-session', gitPushed: false };
   isSaving = true;
   try {
-    const cloudToken = (localStorage.getItem('acl_github_token') || '').trim();
-    const cloudOwner = (localStorage.getItem('acl_github_owner') || '').trim();
-    const cloudRepo = (localStorage.getItem('acl_github_repo') || '').trim();
-    const cloudBranch = (localStorage.getItem('acl_github_branch') || '').trim();
-
     const headers = { 'Content-Type': 'application/json' };
     if (cloudToken) {
       headers['Authorization'] = 'Bearer ' + cloudToken;
@@ -199,47 +207,57 @@ async function saveCurrentFile() {
       headers: headers,
       body: JSON.stringify(bodyPayload),
     });
-    const resData = await resp.json().catch(() => ({}));
+    resData = await resp.json().catch(() => ({}));
+
     if (resp.ok && resData.success !== false) {
       lastSaveTime = Date.now();
-      if (resData && resData.gitPushed) {
-        setSyncStatus(`Saved to IDE & pushed to GitHub ✔`, 'green');
-      } else if (resData && resData.repoConnected) {
-        setSyncStatus(`Saved to IDE (GitHub push pending) ✔`, 'yellow');
+      if (resData.gitPushed) {
+        setSyncStatus('Saved to IDE & pushed to GitHub', 'green');
+      } else if (cloudToken && resData.mode === 'github') {
+        setSyncStatus('Saved to IDE (GitHub push pending)', 'yellow');
       } else {
-        setSyncStatus('Saved locally to IDE (Not synced with GitHub) ✔', 'yellow');
+        setSyncStatus('Saved in Markdown Studio (browser session)', 'green');
       }
-    } else {
+    } else if (resp.status === 404) {
+      lastSaveTime = Date.now();
+      setSyncStatus('Saved in Markdown Studio (save API not deployed yet)', 'yellow');
+      resData = { success: true, gitPushed: false, mode: 'browser-session' };
+    } else if (cloudToken) {
       const errorMsg = resData.error || resData.message || `Server error (${resp.status})`;
-      showToast(`Save failed: ${errorMsg}`, 'error');
-      setSyncStatus(`Save failed: ${errorMsg}`, 'red');
-
+      showToast(`GitHub save failed: ${errorMsg}`, 'error');
+      setSyncStatus(`GitHub save failed: ${errorMsg}`, 'red');
       return false;
+    } else {
+      lastSaveTime = Date.now();
+      setSyncStatus('Saved in Markdown Studio (browser session)', 'green');
+      resData = { success: true, gitPushed: false, mode: 'browser-session' };
     }
   } catch (e) {
-    showToast(`Save network error: ${e.message}`, 'error');
-    setSyncStatus(`Network error: ${e.message}`, 'red');
-    return false;
+    lastSaveTime = Date.now();
+    setSyncStatus('Saved in Markdown Studio (offline / browser session)', 'yellow');
+    resData = { success: true, gitPushed: false, mode: 'browser-session' };
   } finally {
     isSaving = false;
   }
 
   isDirty = false;
+  persistFilesToBrowserSession();
 
-  const syncSuffix = resData && resData.gitPushed ? ' (Synced to GitHub)' : ' (Updated in IDE, not synced with GitHub)';
+  const syncSuffix = resData && resData.gitPushed ? ' (Synced to GitHub)' : ' (updated in Studio)';
   if (status === 'Approved' || status === 'Accepted') {
-    showToast(`🎉 Approved '${file.filename}'!${syncSuffix}`, 'success');
+    showToast(`Approved '${file.filename}'!${syncSuffix}`, 'success');
   } else if (status === 'Rejected') {
-    showToast(`🔴 Rejected '${file.filename}'${syncSuffix}`, 'error');
+    showToast(`Rejected '${file.filename}'${syncSuffix}`, 'error');
   } else {
     showToast(`Saved '${file.filename}' [${status}]${syncSuffix}`, 'info');
   }
   renderFileTree();
   evaluateProceedButton();
-  if (activeAppView === 'dashboard') {
-    renderDeliveryDashboard();
+  if (activeAppView === 'dashboard' || activeAppView === 'dashboard-summarized' || activeAppView === 'dashboard-scrum') {
+    if (typeof renderDeliveryDashboard === 'function') renderDeliveryDashboard();
+    if (typeof renderScrumMasterDashboard === 'function' && activeAppView === 'dashboard-scrum') renderScrumMasterDashboard();
   }
-  if (typeof updateGmailButtonState === "function") {
+  if (typeof updateGmailButtonState === 'function') {
     updateGmailButtonState();
   }
   return true;
@@ -337,6 +355,7 @@ async function onStatusChange(newStatus) {
 
 if (typeof window !== 'undefined') {
   window.saveCurrentFile = saveCurrentFile;
+  window.onStatusChange = onStatusChange;
   window.syncFromLiveDisk = syncFromLiveDisk;
   window.refreshTree = async function (quiet = false) {
     return await syncFromLiveDisk(quiet);
