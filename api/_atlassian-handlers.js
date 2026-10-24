@@ -68,13 +68,27 @@ export async function handleDiscover(req, res) {
   });
 }
 
+function atlassianActionReply(res, result, err) {
+  if (err) {
+    return reply(res, 400, { success: false, error: err.message || String(err) });
+  }
+  if (result && result.success === false) {
+    return reply(res, 400, result);
+  }
+  return reply(res, 200, { success: true, ...result });
+}
+
 export async function handleSyncJira(req, res) {
   if (req.method === 'OPTIONS') return reply(res, 200, '');
   const projectRoot = process.cwd();
   if (req.method !== 'POST') return reply(res, 405, { error: 'Method Not Allowed' });
   const payload = await readJsonBody(req);
-  const result = await atlassianMod.syncToJira(projectRoot, payload);
-  return reply(res, result.success ? 200 : 400, result);
+  try {
+    const result = await atlassianMod.syncToJira(projectRoot, payload);
+    return atlassianActionReply(res, result);
+  } catch (err) {
+    return atlassianActionReply(res, null, err);
+  }
 }
 
 export async function handlePullJira(req, res) {
@@ -82,8 +96,12 @@ export async function handlePullJira(req, res) {
   const projectRoot = process.cwd();
   if (req.method !== 'POST') return reply(res, 405, { error: 'Method Not Allowed' });
   const payload = await readJsonBody(req);
-  const result = await atlassianMod.pullFromJira(projectRoot, payload);
-  return reply(res, result.success ? 200 : 400, result);
+  try {
+    const result = await atlassianMod.pullFromJira(projectRoot, payload);
+    return atlassianActionReply(res, result);
+  } catch (err) {
+    return atlassianActionReply(res, null, err);
+  }
 }
 
 export async function handleSyncConfluence(req, res) {
@@ -91,8 +109,12 @@ export async function handleSyncConfluence(req, res) {
   const projectRoot = process.cwd();
   if (req.method !== 'POST') return reply(res, 405, { error: 'Method Not Allowed' });
   const payload = await readJsonBody(req);
-  const result = await atlassianMod.syncToConfluence(projectRoot, payload);
-  return reply(res, result.success ? 200 : 400, result);
+  try {
+    const result = await atlassianMod.syncToConfluence(projectRoot, payload);
+    return atlassianActionReply(res, result);
+  } catch (err) {
+    return atlassianActionReply(res, null, err);
+  }
 }
 
 export async function handlePullConfluence(req, res) {
@@ -100,8 +122,12 @@ export async function handlePullConfluence(req, res) {
   const projectRoot = process.cwd();
   if (req.method !== 'POST') return reply(res, 405, { error: 'Method Not Allowed' });
   const payload = await readJsonBody(req);
-  const result = await atlassianMod.pullFromConfluence(projectRoot, payload);
-  return reply(res, result.success ? 200 : 400, result);
+  try {
+    const result = await atlassianMod.pullFromConfluence(projectRoot, payload);
+    return atlassianActionReply(res, result);
+  } catch (err) {
+    return atlassianActionReply(res, null, err);
+  }
 }
 
 export async function handleSyncHistory(req, res) {

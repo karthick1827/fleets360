@@ -165,12 +165,28 @@ export default async function handler(req, res) {
       } catch {}
 
       try {
-        const userRes = await fetch(`https://api.github.com/users/${repoOwner}`, { headers: ghHeaders });
-        if (userRes.ok) {
-          ghUserData = await userRes.json();
+        if (token) {
+          const meRes = await fetch('https://api.github.com/user', { headers: ghHeaders });
+          if (meRes.ok) {
+            ghUserData = await meRes.json();
+          }
         }
       } catch {}
+
+      if (!ghUserData) {
+        try {
+          const userRes = await fetch(`https://api.github.com/users/${repoOwner}`, { headers: ghHeaders });
+          if (userRes.ok) {
+            ghUserData = await userRes.json();
+          }
+        } catch {}
+      }
     }
+
+    const ghLogin = (ghUserData && ghUserData.login) || repoOwner || gitUserName || '';
+    const avatarUrl =
+      (ghUserData && ghUserData.avatar_url) ||
+      (ghLogin ? `https://avatars.githubusercontent.com/${encodeURIComponent(ghLogin)}?s=128&v=4` : null);
 
     const responsePayload = {
       isPushed: isPushed,
@@ -178,10 +194,10 @@ export default async function handler(req, res) {
       repoDeleted: false,
       remoteOrigin: remoteOrigin || (repoOwner && repoName ? `https://github.com/${repoOwner}/${repoName}.git` : ''),
       userDetails: {
-        username: (ghUserData && ghUserData.login) || repoOwner || gitUserName || 'Developer',
-        fullName: (ghUserData && ghUserData.name) || gitUserName || repoOwner || 'Developer',
+        username: ghLogin || 'Developer',
+        fullName: (ghUserData && ghUserData.name) || gitUserName || ghLogin || 'Developer',
         email: gitUserEmail || (ghUserData && ghUserData.email) || '',
-        avatarUrl: (ghUserData && ghUserData.avatar_url) || null,
+        avatarUrl,
         orgRole: 'Admin / Maintainer',
       },
       projectDetails: {

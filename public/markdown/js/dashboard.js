@@ -1413,6 +1413,15 @@ function renderDeveloperDashboard() {
 // ===================================================
 // User Control Centre (Git Identity & Permissions Dashboard)
 // ===================================================
+function gitDetailsRequestInit() {
+  const headers = {};
+  try {
+    const token = (localStorage.getItem('acl_github_token') || '').trim();
+    if (token) headers['X-GitHub-Token'] = token;
+  } catch (e) {}
+  return { headers, cache: 'no-store' };
+}
+
 function updateNavUserControlCentre(data) {
   const isConnected = Boolean(data && data.repoConnected === true && !data.repoDeleted);
   const hasUser = Boolean(isConnected && data.userDetails && (data.userDetails.fullName || data.userDetails.username));
@@ -1421,7 +1430,12 @@ function updateNavUserControlCentre(data) {
   const railIcon = document.getElementById('railGitIcon');
 
   const ownerName = hasUser ? data.userDetails.fullName || data.userDetails.username : isConnected ? 'Developer' : 'No Repo Connected';
-  const avatarUrl = hasUser ? data.userDetails.avatarUrl : null;
+  const avatarLogin = hasUser ? data.userDetails.username : null;
+  const avatarUrl =
+    hasUser && (data.userDetails.avatarUrl || avatarLogin)
+      ? data.userDetails.avatarUrl ||
+        `https://avatars.githubusercontent.com/${encodeURIComponent(avatarLogin)}?s=64&v=4`
+      : null;
 
   if (navTitle) {
     navTitle.textContent = ownerName;
@@ -1456,7 +1470,7 @@ async function renderGitDashboard() {
   try {
     let data = null;
     try {
-      const res = await fetch('/api/git-details?t=' + Date.now());
+      const res = await fetch('/api/git-details?t=' + Date.now(), gitDetailsRequestInit());
       if (res.ok) {
         data = await res.json();
       }
@@ -1480,7 +1494,10 @@ async function renderGitDashboard() {
     const hasUsername = isConnected && Boolean(user.username);
     const hasFullName = isConnected && Boolean(user.fullName);
     const hasEmail = isConnected && Boolean(user.email);
-    const hasAvatar = isConnected && Boolean(user.avatarUrl);
+    const profileAvatarSrc =
+      user.avatarUrl ||
+      (user.username ? `https://avatars.githubusercontent.com/${encodeURIComponent(user.username)}?s=128&v=4` : '');
+    const hasAvatar = isConnected && Boolean(profileAvatarSrc);
     const hasOrgRole = isConnected && Boolean(user.orgRole);
 
     const hasProjectName = isConnected && Boolean(project.projectName);
@@ -1534,7 +1551,7 @@ async function renderGitDashboard() {
       `;
 
     const avatarHtml = hasAvatar
-      ? `<img src="${user.avatarUrl}" alt="${user.fullName || user.username || 'User Avatar'}" onerror="this.onerror=null; this.parentElement.innerHTML='<span class=\'git-profile-avatar-placeholder\'>👤</span>';" />`
+      ? `<img src="${profileAvatarSrc}" alt="${user.fullName || user.username || 'User Avatar'}" referrerpolicy="no-referrer" onerror="this.onerror=null; this.parentElement.innerHTML='<span class=\'git-profile-avatar-placeholder\'>👤</span>';" />`
       : `<span class="git-profile-avatar-placeholder">👤</span>`;
 
     const linkedReposHtml = hasLinkedRepos
@@ -1710,7 +1727,7 @@ async function renderGitDashboard() {
 
 // Auto-check GitHub link on page load to update navbar
 if (typeof window !== 'undefined') {
-  fetch('/api/git-details')
+  fetch('/api/git-details', gitDetailsRequestInit())
     .then((r) => r.json())
     .then((d) => updateNavUserControlCentre(d))
     .catch(() => updateNavUserControlCentre(null));
