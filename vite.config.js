@@ -945,13 +945,30 @@ function aclMarkdownSaverPlugin() {
 import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
 import { defineConfig } from 'vite'
+import vercel from 'vite-plugin-vercel/vite'
+import { getVercelEntries } from 'vite-plugin-vercel'
 
 // https://vite.dev/config/
-export default defineConfig({
-  plugins: [
-    aclMarkdownSaverPlugin(),
-    react(),
-    babel({ presets: [reactCompilerPreset()] })
-  ],
+export default defineConfig(async () => {
+  const apiEntries = await getVercelEntries('api', { destination: 'api' })
+
+  return {
+    plugins: [
+      aclMarkdownSaverPlugin(),
+      react(),
+      babel({ presets: [reactCompilerPreset()] }),
+      vercel({
+        defaultMaxDuration: 60,
+        cleanUrls: true,
+        entries: apiEntries,
+        rewrites: [
+          {
+            source: '/((?!api/|markdown\\.html|markdown/|assets/|favicon|.*\\..*).*)',
+            destination: '/index.html',
+          },
+        ],
+      }),
+    ],
+  }
 })
   

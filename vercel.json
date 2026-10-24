@@ -1,15 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "cleanUrls": true,
-  "functions": {
-    "api/**/*.js": {
-      "includeFiles": "_acl/**, _acl-output/**, tools/**"
-    }
-  },
-  "rewrites": [
-    {
-      "source": "/((?!api/|markdown\\.html|markdown/|assets/|favicon|.*\\..*).*)",
-      "destination": "/index.html"
-    }
-  ]
+  "buildCommand": "npm run build",
+  "framework": "vite",
+  "installCommand": "npm ci"
 }

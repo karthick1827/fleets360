@@ -1,2 +1,2 @@
-import { handleSyncJira } from '../atlassian.js';
+import { handleSyncJira } from '../_atlassian-handlers.js';
 export default handleSyncJira;

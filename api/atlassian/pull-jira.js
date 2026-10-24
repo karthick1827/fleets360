@@ -1,2 +1,2 @@
-import { handlePullJira } from '../atlassian.js';
+import { handlePullJira } from '../_atlassian-handlers.js';
 export default handlePullJira;

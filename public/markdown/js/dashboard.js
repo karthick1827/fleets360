@@ -1717,6 +1717,20 @@ if (typeof window !== 'undefined') {
 }
 
 // Safe JSON Fetch Helper (Resilient against HTML error pages or empty response bodies)
+function readAtlassianClientConfig() {
+  try {
+    const raw = localStorage.getItem('__acl_atlassian_config__');
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function atlassianApiPayload(extra = {}) {
+  const stored = readAtlassianClientConfig();
+  return { ...stored, ...extra };
+}
+
 async function safeFetchJson(url, options = {}) {
   try {
     const res = await fetch(url, options);
@@ -2040,7 +2054,11 @@ window.saveAtlassianConfig = async function (e) {
       try {
         localStorage.removeItem('__acl_atlassian_config__');
       } catch (e) {}
-      const errMsg = (res.data && res.data.error) || (res.data && res.data.message) || 'Server returned HTTP ' + res.status;
+      let errMsg = (res.data && res.data.error) || (res.data && res.data.message) || 'Server returned HTTP ' + res.status;
+      if (res.status === 404) {
+        errMsg =
+          'API route not found (HTTP 404). On Vercel, confirm Root Directory is the repo root (not dist/), redeploy, and check Deployment → Serverless Functions lists /api/atlassian/config.';
+      }
       alert('⚠️ Error saving configuration: ' + errMsg);
       renderAtlassianSuite(true);
     }
@@ -2076,7 +2094,7 @@ window.executeJiraSync = async function () {
     const res = await safeFetchJson('/api/atlassian/sync-jira', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
+      body: JSON.stringify(atlassianApiPayload()),
     });
     const result = res.data;
     if (res.ok && result.success) {
@@ -2110,7 +2128,7 @@ window.executeJiraPull = async function () {
     const res = await safeFetchJson('/api/atlassian/pull-jira', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
+      body: JSON.stringify(atlassianApiPayload()),
     });
     const result = res.data;
     if (res.ok && result.success) {
@@ -2171,7 +2189,7 @@ window.executeConfluenceSync = async function () {
     const res = await safeFetchJson('/api/atlassian/sync-confluence', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
+      body: JSON.stringify(atlassianApiPayload()),
     });
     const result = res.data;
     if (res.ok && result.success) {
@@ -2209,7 +2227,7 @@ window.executeConfluencePull = async function () {
     const res = await safeFetchJson('/api/atlassian/pull-confluence', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
+      body: JSON.stringify(atlassianApiPayload()),
     });
     const result = res.data;
     if (res.ok && result.success) {

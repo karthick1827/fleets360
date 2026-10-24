@@ -1,2 +1,2 @@
-import { handleConfig } from '../atlassian.js';
+import { handleConfig } from '../_atlassian-handlers.js';
 export default handleConfig;

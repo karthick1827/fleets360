@@ -1,2 +1,2 @@
-import { handlePullConfluence } from '../atlassian.js';
+import { handlePullConfluence } from '../_atlassian-handlers.js';
 export default handlePullConfluence;
