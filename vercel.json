@@ -1,18 +1,15 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
+  "functions": {
+    "api/**/*.js": {
+      "includeFiles": "_acl/**, _acl-output/**, tools/**"
+    }
+  },
   "rewrites": [
     {
-      "source": "/api/atlassian/(.*)",
-      "destination": "/api/atlassian/$1"
-    },
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
-    },
-    {
-      "source": "/markdown.html",
-      "destination": "/markdown.html"
+      "source": "/((?!api/|markdown\\.html|markdown/|assets/|favicon|.*\\..*).*)",
+      "destination": "/index.html"
     }
   ]
 }

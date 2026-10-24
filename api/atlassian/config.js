@@ -1,3 +1,2 @@
-// Dedicated Serverless Endpoint: api/atlassian/config.js
-import handler from '../atlassian.js';
-export default handler;
+import { handleConfig } from '../atlassian.js';
+export default handleConfig;

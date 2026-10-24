@@ -1,3 +1,2 @@
-// Dedicated Serverless Endpoint: api/atlassian/pull-confluence.js
-import handler from '../atlassian.js';
-export default handler;
+import { handlePullConfluence } from '../atlassian.js';
+export default handlePullConfluence;
