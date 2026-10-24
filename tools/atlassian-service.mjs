@@ -11,7 +11,10 @@ function getAclFilePath(projectRoot, filename, forWrite = false) {
   const primaryPath = path.join(projectRoot, '_acl', filename);
   if (!forWrite) {
     const tmpPath = path.join('/tmp', '_acl', filename);
-    if ((process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) && fs.existsSync(tmpPath)) {
+    if (
+      (process.env.VERCEL || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME) &&
+      fs.existsSync(tmpPath)
+    ) {
       return tmpPath;
     }
     if (fs.existsSync(primaryPath)) {
@@ -22,7 +25,7 @@ function getAclFilePath(projectRoot, filename, forWrite = false) {
     }
     return primaryPath;
   }
-  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  if (process.env.VERCEL || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME) {
     const tmpPath = path.join('/tmp', '_acl', filename);
     const tmpDir = path.dirname(tmpPath);
     if (!fs.existsSync(tmpDir)) {
@@ -206,12 +209,6 @@ export async function validateAtlassianConfig(config) {
 }
 
 export async function saveAtlassianConfig(projectRoot, config) {
-  const aclDir = path.join(projectRoot, '_acl');
-  if (!fs.existsSync(aclDir)) {
-    fs.mkdirSync(aclDir, { recursive: true });
-  }
-  const configPath = path.join(aclDir, 'atlassian-config.json');
-
   if (!config.connected && !config.domain && !config.email) {
     const cleared = {
       domain: '',

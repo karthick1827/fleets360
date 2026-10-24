@@ -1816,7 +1816,7 @@ async function renderAtlassianSuite(isPushed) {
         <div class="atlassian-config-box" id="atlassianConfigPanel" style="display: none;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <strong style="color: #0f172a; font-size: 0.95rem;">Atlassian Cloud Credentials & Workspace Keys</strong>
-            <span style="font-size: 0.78rem; color: #64748b;">Stored locally in <code>_acl/atlassian-config.json</code></span>
+            <span style="font-size: 0.78rem; color: #64748b;">Credentials saved in this browser; on Vercel, the server only verifies (no repo write).</span>
           </div>
 
           <form id="atlassianConfigForm" onsubmit="saveAtlassianConfig(event); return false;">
