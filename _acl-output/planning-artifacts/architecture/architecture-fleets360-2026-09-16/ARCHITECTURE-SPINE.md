@@ -35,7 +35,7 @@ confluence_page_id: 6422530
 
 # Architecture Spine — Fleets 360
 
-## Design Paradigms
+## Design Paradigm
 
 **Layered single-page application (SPA)** on Vite + React:
 
