@@ -6,6 +6,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { githubContextFromRequest, loadAclOutputMarkdownFromGitHub } from './acl-output-github.mjs';
 import {
   discoverDeliverablesFromWorkspace,
   discoverStoriesAndEpicsFromWorkspace,
@@ -686,6 +687,23 @@ export async function fetchJiraIssues(config) {
  * Updates existing tickets in-place via PUT to prevent duplicates,
  * or creates new tickets via POST if they do not exist yet.
  */
+async function resolveWorkspace(projectRoot, customConfig = {}, req = null) {
+  const split = splitAtlassianPayload(customConfig);
+  let { workspaceFiles, configFields } = split;
+  let useWorkspace = workspaceFiles.length > 0;
+
+  if (!useWorkspace) {
+    const gh = githubContextFromRequest(req, customConfig);
+    const fromGitHub = await loadAclOutputMarkdownFromGitHub(gh);
+    if (fromGitHub.length > 0) {
+      workspaceFiles = fromGitHub;
+      useWorkspace = true;
+    }
+  }
+
+  return { workspaceFiles, configFields, useWorkspace };
+}
+
 function persistAtlassianSession(projectRoot, config) {
   const snapshot = {
     ...config,
@@ -699,8 +717,8 @@ function persistAtlassianSession(projectRoot, config) {
   }
 }
 
-export async function syncToJira(projectRoot, customConfig = {}) {
-  const { workspaceFiles, configFields, useWorkspace } = splitAtlassianPayload(customConfig);
+export async function syncToJira(projectRoot, customConfig = {}, req = null) {
+  const { workspaceFiles, configFields, useWorkspace } = await resolveWorkspace(projectRoot, customConfig, req);
   const config = { ...getAtlassianConfig(projectRoot), ...configFields };
   const { epics, stories } = useWorkspace
     ? discoverStoriesAndEpicsFromWorkspace(workspaceFiles)
@@ -722,7 +740,8 @@ export async function syncToJira(projectRoot, customConfig = {}) {
     return {
       success: false,
       error:
-        'No epics or stories found in your workspace. In Markdown Studio, sync documents from GitHub (or open your specs), then retry JIRA sync.',
+        'No epics or stories found in _acl-output. Confirm GitHub repo/branch is correct, open Markdown Studio file list (sync from GitHub), then retry.',
+      workspaceFileCount: workspaceFiles.length,
     };
   }
 
@@ -1035,8 +1054,8 @@ export async function syncToJira(projectRoot, customConfig = {}) {
  *  - If exists AND UNCHANGED: keeps current status (e.g. Approved) untouched!
  *  - If new: creates new spec-X-Y.md file with status: In Review and links into epics.md
  */
-export async function pullFromJira(projectRoot, customConfig = {}) {
-  const { workspaceFiles, configFields, useWorkspace } = splitAtlassianPayload(customConfig);
+export async function pullFromJira(projectRoot, customConfig = {}, req = null) {
+  const { workspaceFiles, configFields, useWorkspace } = await resolveWorkspace(projectRoot, customConfig, req);
   const config = { ...getAtlassianConfig(projectRoot), ...configFields };
   const mapping = getAtlassianMapping(projectRoot);
   const localData = useWorkspace
@@ -1772,8 +1791,8 @@ function slugify(text) {
  * Updates existing pages in-place via PUT with version increment,
  * or creates new pages via POST if they do not exist yet.
  */
-export async function syncToConfluence(projectRoot, customConfig = {}) {
-  const { workspaceFiles, configFields, useWorkspace } = splitAtlassianPayload(customConfig);
+export async function syncToConfluence(projectRoot, customConfig = {}, req = null) {
+  const { workspaceFiles, configFields, useWorkspace } = await resolveWorkspace(projectRoot, customConfig, req);
   const config = { ...getAtlassianConfig(projectRoot), ...configFields };
   const mapping = getAtlassianMapping(projectRoot);
   const deliverables = useWorkspace
@@ -1796,7 +1815,8 @@ export async function syncToConfluence(projectRoot, customConfig = {}) {
     return {
       success: false,
       error:
-        'No phase deliverables found in your workspace. Sync _acl-output from GitHub in Markdown Studio, then retry Confluence sync.',
+        'No phase deliverables found in _acl-output. Confirm GitHub repo/branch, sync files in Markdown Studio, then retry Confluence sync.',
+      workspaceFileCount: workspaceFiles.length,
     };
   }
 
@@ -2004,8 +2024,8 @@ export async function syncToConfluence(projectRoot, customConfig = {}) {
  *  - If exists AND UNCHANGED: keeps current status (e.g. Approved) untouched!
  *  - If new: creates new deliverable file with status: In Review
  */
-export async function pullFromConfluence(projectRoot, customConfig = {}) {
-  const { workspaceFiles, configFields, useWorkspace } = splitAtlassianPayload(customConfig);
+export async function pullFromConfluence(projectRoot, customConfig = {}, req = null) {
+  const { workspaceFiles, configFields, useWorkspace } = await resolveWorkspace(projectRoot, customConfig, req);
   const config = { ...getAtlassianConfig(projectRoot), ...configFields };
   const mapping = getAtlassianMapping(projectRoot);
   if (!mapping.confluence) mapping.confluence = {};

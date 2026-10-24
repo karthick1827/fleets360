@@ -100,7 +100,7 @@ export async function handleSyncJira(req, res) {
   if (req.method !== 'POST') return reply(res, 405, { error: 'Method Not Allowed' });
   const payload = await readJsonBody(req);
   try {
-    const result = await atlassianMod.syncToJira(projectRoot, payload);
+    const result = await atlassianMod.syncToJira(projectRoot, payload, req);
     return atlassianActionReply(res, result);
   } catch (err) {
     return atlassianActionReply(res, null, err);
@@ -113,7 +113,7 @@ export async function handlePullJira(req, res) {
   if (req.method !== 'POST') return reply(res, 405, { error: 'Method Not Allowed' });
   const payload = await readJsonBody(req);
   try {
-    const result = await atlassianMod.pullFromJira(projectRoot, payload);
+    const result = await atlassianMod.pullFromJira(projectRoot, payload, req);
     return atlassianActionReply(res, result);
   } catch (err) {
     return atlassianActionReply(res, null, err);
@@ -126,7 +126,7 @@ export async function handleSyncConfluence(req, res) {
   if (req.method !== 'POST') return reply(res, 405, { error: 'Method Not Allowed' });
   const payload = await readJsonBody(req);
   try {
-    const result = await atlassianMod.syncToConfluence(projectRoot, payload);
+    const result = await atlassianMod.syncToConfluence(projectRoot, payload, req);
     return atlassianActionReply(res, result);
   } catch (err) {
     return atlassianActionReply(res, null, err);
@@ -139,7 +139,7 @@ export async function handlePullConfluence(req, res) {
   if (req.method !== 'POST') return reply(res, 405, { error: 'Method Not Allowed' });
   const payload = await readJsonBody(req);
   try {
-    const result = await atlassianMod.pullFromConfluence(projectRoot, payload);
+    const result = await atlassianMod.pullFromConfluence(projectRoot, payload, req);
     return atlassianActionReply(res, result);
   } catch (err) {
     return atlassianActionReply(res, null, err);

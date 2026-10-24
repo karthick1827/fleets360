@@ -1765,9 +1765,66 @@ function getAtlassianWorkspaceFiles() {
   }
 }
 
-function atlassianApiPayload(extra = {}) {
+function githubSyncContext() {
+  try {
+    return {
+      githubToken: (localStorage.getItem('acl_github_token') || '').trim() || undefined,
+      githubOwner: (localStorage.getItem('acl_github_owner') || '').trim() || undefined,
+      githubRepo: (localStorage.getItem('acl_github_repo') || '').trim() || undefined,
+      githubBranch: (localStorage.getItem('acl_github_branch') || '').trim() || undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+async function ensureAtlassianWorkspaceFiles() {
+  const current = getAtlassianWorkspaceFiles();
+  if (current.length > 0 && current.some((f) => f.content && String(f.content).length > 32)) {
+    return current;
+  }
+
+  const headers = { 'Cache-Control': 'no-store' };
+  const gh = githubSyncContext();
+  if (gh.githubToken) {
+    headers.Authorization = 'Bearer ' + gh.githubToken;
+    headers['X-GitHub-Token'] = gh.githubToken;
+  }
+
+  let queryUrl = '/api/list-markdown-files?t=' + Date.now();
+  if (gh.githubOwner) queryUrl += '&owner=' + encodeURIComponent(gh.githubOwner);
+  if (gh.githubRepo) queryUrl += '&repo=' + encodeURIComponent(gh.githubRepo);
+  if (gh.githubBranch) queryUrl += '&branch=' + encodeURIComponent(gh.githubBranch);
+
+  try {
+    const res = await fetch(queryUrl, { headers, cache: 'no-store' });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && Array.isArray(data.files) && data.files.length > 0) {
+        const mapped = data.files.map((f) => ({
+          filename: f.filename,
+          folderPath: f.folderPath,
+          content: f.content,
+          status: f.status,
+        }));
+        if (typeof files !== 'undefined' && Array.isArray(files) && files.length === 0) {
+          files = data.files;
+          try {
+            localStorage.setItem('acl_adlc_project_markdown_files', JSON.stringify(files));
+          } catch (e) {}
+        }
+        return mapped;
+      }
+    }
+  } catch (e) {}
+
+  return current;
+}
+
+async function atlassianApiPayloadAsync(extra = {}) {
   const stored = readAtlassianClientConfig();
-  return { ...stored, ...extra, workspaceFiles: getAtlassianWorkspaceFiles() };
+  const workspaceFiles = await ensureAtlassianWorkspaceFiles();
+  return { ...stored, ...githubSyncContext(), ...extra, workspaceFiles };
 }
 
 function applyAtlassianClientFiles(clientFiles) {
@@ -2177,7 +2234,7 @@ window.executeJiraSync = async function () {
     const res = await safeFetchJson('/api/atlassian-sync-jira', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(atlassianApiPayload()),
+      body: JSON.stringify(await atlassianApiPayloadAsync()),
     });
     const result = res.data;
     if (res.ok && result && result.success) {
@@ -2216,7 +2273,7 @@ window.executeJiraPull = async function () {
     const res = await safeFetchJson('/api/atlassian-pull-jira', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(atlassianApiPayload()),
+      body: JSON.stringify(await atlassianApiPayloadAsync()),
     });
     const result = res.data;
     if (res.ok && result && result.success) {
@@ -2288,7 +2345,7 @@ window.executeConfluenceSync = async function () {
     const res = await safeFetchJson('/api/atlassian-sync-confluence', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(atlassianApiPayload()),
+      body: JSON.stringify(await atlassianApiPayloadAsync()),
     });
     const result = res.data;
     if (res.ok && result && result.success) {
@@ -2331,7 +2388,7 @@ window.executeConfluencePull = async function () {
     const res = await safeFetchJson('/api/atlassian-pull-confluence', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(atlassianApiPayload()),
+      body: JSON.stringify(await atlassianApiPayloadAsync()),
     });
     const result = res.data;
     if (res.ok && result && result.success) {

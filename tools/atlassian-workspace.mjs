@@ -8,9 +8,17 @@ export function isServerlessRuntime() {
 }
 
 export function splitAtlassianPayload(customConfig = {}) {
-  const { workspaceFiles, ...configFields } = customConfig;
+  const { workspaceFiles, githubOwner, githubRepo, githubBranch, githubToken, ...configFields } = customConfig;
   const files = Array.isArray(workspaceFiles) ? workspaceFiles : [];
-  return { workspaceFiles: files, configFields, useWorkspace: files.length > 0 };
+  return {
+    workspaceFiles: files,
+    configFields,
+    useWorkspace: files.length > 0,
+    githubOwner,
+    githubRepo,
+    githubBranch,
+    githubToken,
+  };
 }
 
 export function workspaceRelativePath(folderPath, filename) {
@@ -182,6 +190,7 @@ const DOC_MAP = [
   { pattern: /^epics\.md$/i, type: 'Phase 3B · Epics & Stories', defaultTitle: 'Epics & User Stories Breakdown' },
   { pattern: /^design\.md$/i, type: 'Phase 2 · UX Design Spec', defaultTitle: 'UI/UX Visual Design Specification' },
   { pattern: /^experience\.md$/i, type: 'Phase 2 · User Experience', defaultTitle: 'User Experience & Interaction Spec' },
+  { pattern: /^project-context\.md$/i, type: 'Project Context', defaultTitle: 'Project Context' },
 ];
 
 const EXCLUDED_CHILD_NAMES = new Set([
