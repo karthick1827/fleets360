@@ -3,7 +3,15 @@
   "cleanUrls": true,
   "rewrites": [
     {
-      "source": "/((?!api/|markdown\\.html|markdown/|assets/|favicon|.*\\..*).*)",
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    },
+    {
+      "source": "/markdown.html",
+      "destination": "/markdown.html"
+    },
+    {
+      "source": "/((?!api/|markdown|assets/|favicon|.*\\..*).*)",
       "destination": "/index.html"
     }
   ]
