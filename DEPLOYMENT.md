@@ -64,20 +64,21 @@ npx vercel --prod --yes
 
 The **User Control Centre**, JIRA, and Confluence features live in **Markdown Studio** at **`/markdown.html`**, not the React `/home` app. They call `/api/*` routes implemented as **serverless functions**.
 
-This repo uses **`vite-plugin-vercel`**: `npm run build` emits the [Vercel Build Output API](https://vercel.com/docs/build-output-api/v3) under `.vercel/output/` (static files + `/api/*` functions). A plain Vite deploy that only uploads `dist/` **never** deploys those APIs — every `/api/...` call returns **404**.
+Static UI comes from **`dist/`** (`npm run build`). Serverless routes live in the repo-root **`api/`** folder and are deployed alongside static files (see `vercel.json` `functions` + `rewrites`). Smoke test: `/api/health` → `{"ok":true,...}`.
 
 | Setting | Value |
 | --- | --- |
 | **Root Directory** | *(empty — repository root)* |
 | **Framework Preset** | Vite |
 | **Build Command** | `npm run build` |
-| **Output Directory** | **Leave empty** (do not set `dist`). The plugin writes `.vercel/output`; Vercel must consume that, not only `dist/`. |
+| **Output Directory** | `dist` (also set in `vercel.json`) |
 | **Install Command** | `npm ci` (recommended) |
 
 If **Root Directory** is set to `dist` or another subfolder, Vercel deploys only static files and every `/api/...` request returns **404**.
 
 After deploy, open the deployment in the Vercel dashboard → **Deployment Summary** → confirm **Serverless Functions** lists entries such as:
 
+- `/api/health`
 - `/api/git-details`
 - `/api/atlassian/config`
 - `/api/list-markdown-files`

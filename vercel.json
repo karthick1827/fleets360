@@ -1,7 +1,19 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run build",
-  "framework": "vite",
+  "outputDirectory": "dist",
   "installCommand": "npm ci",
-  "outputDirectory": null
+  "cleanUrls": true,
+  "functions": {
+    "api/**/*.js": {
+      "includeFiles": "{_acl/**,_acl-output/**,tools/**}",
+      "maxDuration": 60
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/((?!api/|markdown\\.html|markdown/|assets/|favicon|.*\\..*).*)",
+      "destination": "/index.html"
+    }
+  ]
 }
