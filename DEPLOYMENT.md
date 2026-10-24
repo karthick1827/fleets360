@@ -64,7 +64,9 @@ npx vercel --prod --yes
 
 The **User Control Centre**, JIRA, and Confluence features live in **Markdown Studio** at **`/markdown.html`**, not the React `/home` app. They call `/api/*` routes implemented as **serverless functions**.
 
-Static UI comes from **`dist/`** (`npm run build` / `vercel-build`). Serverless routes live in the repo-root **`api/`** folder; `vercel.json` uses `@vercel/static-build` + `@vercel/node` so both ship in one deployment. Smoke test: `/api/health` → `{"ok":true,...}`.
+Static UI comes from **`dist/`** (`npm run build`). Serverless routes live in the repo-root **`api/`** folder (`vercel.json` `functions` + SPA `rewrites`). Smoke test: `/api/health` → `{"ok":true,...}`.
+
+If GitHub shows **Vercel — Deployment has failed**, open the deployment in the [Vercel dashboard](https://vercel.com/karthick-n-s-projects/fleets360-4wyu) and read the build log; production stays on the last **successful** deploy until a build passes.
 
 | Setting | Value |
 | --- | --- |
