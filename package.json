@@ -7,6 +7,9 @@
     "url": "git+https://github.com/karthick1827/fleets360.git"
   },
   "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
