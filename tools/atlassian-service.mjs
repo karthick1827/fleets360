@@ -648,55 +648,103 @@ export function discoverDeliverables(projectRoot) {
   return deliverables;
 }
 
+function formatJiraApiError(data, status) {
+  if (!data || typeof data !== 'object') return `JIRA search failed (HTTP ${status})`;
+  const msgs = [];
+  if (Array.isArray(data.errorMessages) && data.errorMessages.length) msgs.push(...data.errorMessages);
+  if (Array.isArray(data.errors) && data.errors.length) msgs.push(...data.errors.map(String));
+  if (data.message) msgs.push(String(data.message));
+  if (msgs.length) return msgs.join('; ');
+  return `JIRA search failed (HTTP ${status})`;
+}
+
 /**
- * Fetches all issues for the project from JIRA REST API
+ * Fetches all issues for the project from JIRA REST API (enhanced /search/jql with pagination).
+ * @param {object} [options]
+ * @param {boolean} [options.throwOnError] When true, throws if the API fails (used by pull).
  */
-export async function fetchJiraIssues(config) {
+export async function fetchJiraIssues(config, options = {}) {
+  const { throwOnError = false } = options;
   const domain = (config.domain || '').replace(/\/+$/, '');
   const projectKey = (config.jiraProjectKey || 'PROJ').toUpperCase();
   const auth = Buffer.from(`${config.email}:${config.apiToken}`).toString('base64');
+  const headers = {
+    Authorization: `Basic ${auth}`,
+    Accept: 'application/json',
+  };
+  const jql = `project = ${projectKey} ORDER BY created ASC`;
+  const fields = ['summary', 'description', 'issuetype', 'status', 'parent', 'labels', 'updated'];
 
-  // Try POST /rest/api/3/search/jql first (current Atlassian Cloud Standard)
-  try {
-    const res = await fetch(`${domain}/rest/api/3/search/jql`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${auth}`,
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({
-        jql: `project = "${projectKey}" ORDER BY created ASC`,
-        maxResults: 100,
-        fields: ['summary', 'description', 'issuetype', 'status', 'parent', 'labels', 'updated'],
-      }),
-    });
+  const allIssues = [];
+  let nextPageToken;
+  let lastError = null;
+  let lastStatus = 0;
 
-    if (res.ok) {
-      const data = await res.json();
-      return data.issues || [];
+  for (let page = 0; page < 25; page++) {
+    const body = { jql, maxResults: 100, fields };
+    if (nextPageToken) body.nextPageToken = nextPageToken;
+
+    let pageDone = false;
+    try {
+      const res = await fetch(`${domain}/rest/api/3/search/jql`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(45_000),
+      });
+      lastStatus = res.status;
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const batch = data.issues || [];
+        allIssues.push(...batch);
+        if (data.isLast === true || !data.nextPageToken) {
+          pageDone = true;
+          break;
+        }
+        nextPageToken = data.nextPageToken;
+        continue;
+      }
+      lastError = formatJiraApiError(data, res.status);
+    } catch (err) {
+      lastError = err.message || String(err);
     }
-  } catch (err) {
-    console.warn('[JIRA] POST /rest/api/3/search/jql error, trying fallback:', err.message);
+
+    if (pageDone) break;
+
+    try {
+      const params = new URLSearchParams({
+        jql,
+        maxResults: '100',
+        fields: fields.join(','),
+      });
+      if (nextPageToken) params.set('nextPageToken', nextPageToken);
+      const res = await fetch(`${domain}/rest/api/3/search/jql?${params.toString()}`, {
+        headers,
+        signal: AbortSignal.timeout(45_000),
+      });
+      lastStatus = res.status;
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const batch = data.issues || [];
+        allIssues.push(...batch);
+        if (data.isLast === true || !data.nextPageToken) break;
+        nextPageToken = data.nextPageToken;
+        continue;
+      }
+      lastError = lastError || formatJiraApiError(data, res.status);
+    } catch (err) {
+      lastError = lastError || err.message || String(err);
+    }
+    break;
   }
 
-  // Fallback to GET /rest/api/2/search
-  try {
-    const res = await fetch(`${domain}/rest/api/2/search?jql=project=${projectKey}&maxResults=100`, {
-      headers: {
-        Authorization: `Basic ${auth}`,
-        Accept: 'application/json',
-      },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return data.issues || [];
-    }
-  } catch (err) {
-    console.warn('[JIRA] GET search API failed:', err.message);
+  if (allIssues.length === 0 && lastError) {
+    const err = new Error(lastError + (lastStatus ? ` (HTTP ${lastStatus})` : ''));
+    if (throwOnError) throw err;
+    console.warn('[JIRA] fetchJiraIssues:', err.message);
   }
 
-  return [];
+  return allIssues;
 }
 
 /**
@@ -1153,9 +1201,18 @@ export async function pullFromJira(projectRoot, customConfig = {}, req = null) {
   let jiraIssues = [];
   if (isLive) {
     try {
-      jiraIssues = await fetchJiraIssues(config);
+      jiraIssues = await fetchJiraIssues(config, { throwOnError: true });
     } catch (err) {
-      console.warn('[JIRA Pull] Failed fetching JIRA issues:', err.message);
+      return {
+        success: false,
+        error: err.message || 'Failed to fetch issues from JIRA. Check project key, API token, and JQL search access.',
+      };
+    }
+    if (jiraIssues.length === 0) {
+      return {
+        success: false,
+        error: `No issues returned for JIRA project ${projectKey}. Push story specs first or confirm the project key in Configure Connection.`,
+      };
     }
   } else {
     // Sandbox simulated pull
@@ -1417,7 +1474,7 @@ export async function pullFromJira(projectRoot, customConfig = {}, req = null) {
     summary: `Pulled ${pullResults.items.length} stories from JIRA (${pullResults.updatedCount} changed set to 'In Review', ${pullResults.createdCount} created, ${pullResults.unchangedCount} unchanged preserved).`,
   });
 
-  return { ...pullResults, mapping };
+  return { success: true, ...pullResults, mapping };
 }
 
 function updateStoryFileFrontmatter(filePath, updates = {}) {
@@ -2126,18 +2183,36 @@ export async function pullFromConfluence(projectRoot, customConfig = {}, req = n
   let confluencePages = [];
   if (isLive) {
     try {
-      const res = await fetch(`${domain}/wiki/rest/api/content?spaceKey=${spaceKey}&expand=body.storage,version,history&limit=50`, {
-        headers: {
-          Authorization: `Basic ${auth}`,
-          Accept: 'application/json',
+      const res = await fetch(
+        `${domain}/wiki/rest/api/content?spaceKey=${encodeURIComponent(spaceKey)}&expand=body.storage,version,history&limit=50`,
+        {
+          headers: {
+            Authorization: `Basic ${auth}`,
+            Accept: 'application/json',
+          },
+          signal: AbortSignal.timeout(45_000),
         },
-      });
+      );
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        const data = await res.json();
         confluencePages = data.results || [];
+      } else {
+        const msg =
+          (Array.isArray(data.message) ? data.message.join('; ') : data.message) ||
+          `Confluence list failed (HTTP ${res.status})`;
+        return { success: false, error: msg };
+      }
+      if (confluencePages.length === 0) {
+        return {
+          success: false,
+          error: `No pages found in Confluence space ${spaceKey}. Push deliverables first or verify the space key.`,
+        };
       }
     } catch (err) {
-      console.warn('[Confluence Pull] Failed fetching pages:', err.message);
+      return {
+        success: false,
+        error: err.message || 'Failed to fetch pages from Confluence.',
+      };
     }
   } else {
     confluencePages = localDeliverables.map((d, i) => ({
@@ -2295,7 +2370,7 @@ export async function pullFromConfluence(projectRoot, customConfig = {}, req = n
     summary: `Pulled ${pullResults.items.length} deliverables from Confluence (${pullResults.updatedCount} changed set to 'In Review', ${pullResults.createdCount} created, ${pullResults.unchangedCount} unchanged preserved).`,
   });
 
-  return { ...pullResults, mapping };
+  return { success: true, ...pullResults, mapping };
 }
 
 function updateFileFrontmatter(filePath, updates = {}) {

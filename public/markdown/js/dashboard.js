@@ -1938,11 +1938,16 @@ function applyAtlassianClientFiles(clientFiles) {
       localStorage.setItem('acl_adlc_project_markdown_files', JSON.stringify(files));
     } catch (e) {}
     if (typeof renderFileTree === 'function') renderFileTree();
+    if (typeof evaluateProceedButton === 'function') evaluateProceedButton();
     if (typeof loadFile === 'function' && typeof activeFileId !== 'undefined' && activeFileId) {
       loadFile(activeFileId);
     }
   }
   return changed;
+}
+
+function atlassianResultOk(res, result) {
+  return Boolean(res && res.ok && result && result.success !== false);
 }
 
 async function safeFetchJson(url, options = {}) {
@@ -2319,7 +2324,7 @@ window.executeJiraSync = async function () {
       body: JSON.stringify(await atlassianApiPayloadAsync()),
     });
     const result = res.data;
-    if (res.ok && result && result.success) {
+    if (atlassianResultOk(res, result)) {
       recordAtlassianSyncResult(result, 'JIRA Epics & Stories Sync (Push)');
       displaySyncResultBanner(
         `🎯 Successfully synced ${result.totalStories} story file(s) to JIRA (${result.projectKey}) — in-place updates, no duplicates.`,
@@ -2359,7 +2364,7 @@ window.executeJiraPull = async function () {
       body: JSON.stringify(await atlassianApiPayloadAsync()),
     });
     const result = res.data;
-    if (res.ok && result && result.success) {
+    if (atlassianResultOk(res, result)) {
       if (result.mapping) writeAtlassianClientMapping(result.mapping);
       if (result.clientFiles && result.clientFiles.length > 0) {
         applyAtlassianClientFiles(result.clientFiles);
@@ -2433,7 +2438,7 @@ window.executeConfluenceSync = async function () {
       body: JSON.stringify(await atlassianApiPayloadAsync()),
     });
     const result = res.data;
-    if (res.ok && result && result.success) {
+    if (atlassianResultOk(res, result)) {
       recordAtlassianSyncResult(result, 'Confluence Documentation Sync (Push)');
       if (result.mapping) writeAtlassianClientMapping(result.mapping);
       const detailMsg =
@@ -2478,7 +2483,7 @@ window.executeConfluencePull = async function () {
       body: JSON.stringify(await atlassianApiPayloadAsync()),
     });
     const result = res.data;
-    if (res.ok && result && result.success) {
+    if (atlassianResultOk(res, result)) {
       if (result.mapping) writeAtlassianClientMapping(result.mapping);
       if (result.clientFiles && result.clientFiles.length > 0) {
         applyAtlassianClientFiles(result.clientFiles);

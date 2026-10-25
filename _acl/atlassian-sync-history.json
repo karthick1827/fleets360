@@ -1,5 +1,14 @@
 [
   {
+    "id": "sync-1792907200342",
+    "timestamp": "2026-10-25T05:46:40.342Z",
+    "action": "JIRA Stories Pull (Fetch)",
+    "mode": "simulated-demo",
+    "totalItems": 4,
+    "projectKey": "DEMO",
+    "summary": "Pulled 4 stories from JIRA (0 changed set to 'In Review', 0 created, 4 unchanged preserved)."
+  },
+  {
     "id": "sync-1792906747900",
     "timestamp": "2026-10-25T05:39:07.900Z",
     "action": "JIRA Epics & Stories Sync (Push)",
@@ -349,14 +358,5 @@
     "totalPages": 6,
     "spaceKey": "SHOPPINGC",
     "summary": "Synced 6 deliverables to Confluence space SHOPPINGC (6 updated in-place, 0 created) without duplicates."
-  },
-  {
-    "id": "sync-1792571427114",
-    "timestamp": "2026-10-21T08:30:27.114Z",
-    "action": "Confluence Documentation Pull (Fetch)",
-    "mode": "live-cloud",
-    "totalItems": 6,
-    "spaceKey": "SHOPPINGC",
-    "summary": "Pulled 6 deliverables from Confluence (0 changed set to 'In Review', 0 created, 6 unchanged preserved)."
   }
 ]
