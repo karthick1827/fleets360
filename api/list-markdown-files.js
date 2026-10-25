@@ -11,6 +11,7 @@ import {
   setGithubListCacheEntry,
   GITHUB_LIST_CACHE_TTL_MS,
 } from '../tools/github-list-cache.mjs';
+import { fetchAclMarkdownViaTarball } from '../tools/github-tarball-acl.mjs';
 
 function sessionFileKey(folderPath, filename) {
   const fp = folderPath === 'root' || !folderPath ? '' : String(folderPath).replace(/^\/+/, '');
@@ -108,6 +109,36 @@ function parseMarkdownMetadata(content, fullPath, statTime = null) {
     updatedAt: statTime || new Date().toISOString(),
     content: content,
   };
+}
+
+function dedupeGithubFileList(validFiles) {
+  const seenMap = new Map();
+  for (const f of validFiles) {
+    const key = f.filename.toLowerCase();
+    if (!seenMap.has(key)) {
+      seenMap.set(key, f);
+    } else {
+      const existing = seenMap.get(key);
+      if (key === 'project-context.md') {
+        if (f.folderPath === 'root' || !f.folderPath.includes('0-context')) {
+          seenMap.set(key, f);
+        }
+      } else if (key.startsWith('spec-') || key.startsWith('story-')) {
+        const exFp = (existing.folderPath || '').toLowerCase();
+        const cFp = (f.folderPath || '').toLowerCase();
+        if (cFp.includes('implementation-artifacts')) seenMap.set(key, f);
+        else if (!exFp.includes('implementation-artifacts')) seenMap.set(key, f);
+      } else if (
+        existing.folderPath === 'root' ||
+        (!existing.folderPath.match(/[0-4]-/) && f.folderPath.match(/[0-4]-/))
+      ) {
+        seenMap.set(key, f);
+      }
+    }
+  }
+  const deduplicated = Array.from(seenMap.values());
+  deduplicated.sort(compareStoriesAndFiles);
+  return deduplicated;
 }
 
 function compareStoriesAndFiles(a, b) {
@@ -271,13 +302,42 @@ async function universalHandler(arg1, arg2) {
 
         const headers = githubJsonHeaders(token);
         const stalePayload = getStaleGithubListPayload(cacheKey);
+        let githubRateLimited = false;
 
-        const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`;
-        const treeRes = await fetch(treeUrl, { headers });
+        const tarball = await fetchAclMarkdownViaTarball({ owner, repo, branch, token });
+        if (tarball.ok && Array.isArray(tarball.files)) {
+          const validFiles = tarball.files.map(({ relPath, content }) =>
+            parseMarkdownMetadata(content, relPath),
+          );
+          const deduplicated = dedupeGithubFileList(validFiles);
+          let activeTier = deduplicated.some(
+            (f) =>
+              (f.filename || '').toLowerCase().includes('epics.md') ||
+              (f.filename || '').toLowerCase().includes('spine') ||
+              f.tier === '2',
+          )
+            ? '2'
+            : deduplicated.find((f) => f.tier)?.tier || '1';
 
-        if (!treeRes.ok) {
-          const errBody = await treeRes.text().catch(() => '');
-          if (isGithubRateLimited(treeRes.status, errBody) && stalePayload) {
+          const responsePayload = {
+            success: true,
+            files: deduplicated,
+            activeTier,
+            frameworkVersion,
+            version: frameworkVersion,
+            source: 'github',
+            syncMethod: 'tarball',
+            repo: `${owner}/${repo}`,
+            branch,
+            cachedAt: new Date().toISOString(),
+          };
+          setGithubListCacheEntry(cacheKey, responsePayload);
+          return reply(200, responsePayload);
+        }
+
+        if (tarball.rateLimited) {
+          githubRateLimited = true;
+          if (stalePayload) {
             return reply(200, {
               ...stalePayload,
               fromCache: true,
@@ -285,24 +345,31 @@ async function universalHandler(arg1, arg2) {
               warning: githubRateLimitUserMessage().hint,
             });
           }
-          let hint = token
-            ? 'Check GITHUB_TOKEN has repo or contents:read scope for this repository.'
-            : 'Set GITHUB_TOKEN in Vercel environment variables.';
+        }
+
+        const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`;
+        const treeRes = githubRateLimited ? { ok: false } : await fetch(treeUrl, { headers });
+
+        if (!treeRes.ok && !githubRateLimited) {
+          const errBody = await treeRes.text().catch(() => '');
           if (isGithubRateLimited(treeRes.status, errBody)) {
-            const rl = githubRateLimitUserMessage();
-            hint = rl.hint;
-          }
-          if (isServerless) {
-            const statusCode = isGithubRateLimited(treeRes.status, errBody) ? 429 : treeRes.status === 404 ? 404 : 403;
-            return reply(statusCode, {
+            githubRateLimited = true;
+            if (stalePayload) {
+              return reply(200, {
+                ...stalePayload,
+                fromCache: true,
+                stale: true,
+                warning: githubRateLimitUserMessage().hint,
+              });
+            }
+          } else if (isServerless) {
+            return reply(treeRes.status === 404 ? 404 : 403, {
               success: false,
               files: stalePayload?.files || [],
               source: 'github-error',
-              error: isGithubRateLimited(treeRes.status, errBody)
-                ? githubRateLimitUserMessage().error
-                : `GitHub tree API failed (${treeRes.status})`,
+              error: `GitHub tree API failed (${treeRes.status})`,
               detail: errBody.slice(0, 280),
-              hint,
+              hint: 'Check GITHUB_TOKEN has repo or contents:read scope for this repository.',
               repo: `${owner}/${repo}`,
               branch,
             });
@@ -348,31 +415,7 @@ async function universalHandler(arg1, arg2) {
           });
 
           const validFiles = files.filter(Boolean);
-
-          // Deduplicate project-context.md (prefer root over nested)
-          const seenMap = new Map();
-          for (const f of validFiles) {
-            const key = f.filename.toLowerCase();
-            if (!seenMap.has(key)) {
-              seenMap.set(key, f);
-            } else {
-              const existing = seenMap.get(key);
-              if (key === 'project-context.md') {
-                if (f.folderPath === 'root' || !f.folderPath.includes('0-context')) {
-                  seenMap.set(key, f);
-                }
-              } else if (key.startsWith('spec-') || key.startsWith('story-')) {
-                const exFp = (existing.folderPath || '').toLowerCase();
-                const cFp = (f.folderPath || '').toLowerCase();
-                if (cFp.includes('implementation-artifacts')) seenMap.set(key, f);
-                else if (!exFp.includes('implementation-artifacts')) seenMap.set(key, f);
-              } else if (existing.folderPath === 'root' || (!existing.folderPath.match(/[0-4]-/) && f.folderPath.match(/[0-4]-/))) {
-                seenMap.set(key, f);
-              }
-            }
-          }
-          const deduplicated = Array.from(seenMap.values());
-          deduplicated.sort(compareStoriesAndFiles);
+          const deduplicated = dedupeGithubFileList(validFiles);
 
           let activeTier = deduplicated.some(
             (f) =>
@@ -388,6 +431,7 @@ async function universalHandler(arg1, arg2) {
             frameworkVersion: frameworkVersion,
             version: frameworkVersion,
             source: 'github',
+            syncMethod: 'tree-blobs',
             repo: `${owner}/${repo}`,
             branch: branch,
             cachedAt: new Date().toISOString(),
@@ -395,6 +439,15 @@ async function universalHandler(arg1, arg2) {
 
           setGithubListCacheEntry(cacheKey, responsePayload);
           return reply(200, responsePayload);
+        }
+
+        if (githubRateLimited && stalePayload) {
+          return reply(200, {
+            ...stalePayload,
+            fromCache: true,
+            stale: true,
+            warning: githubRateLimitUserMessage().hint,
+          });
         }
       } catch {
         // Fall back to local disk if GitHub call fails

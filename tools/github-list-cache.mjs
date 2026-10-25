@@ -1,7 +1,7 @@
 /** In-memory list cache (per serverless instance). Reduces repeated full-tree + blob fetches. */
 const githubListCache = new Map();
 
-export const GITHUB_LIST_CACHE_TTL_MS = 120_000;
+export const GITHUB_LIST_CACHE_TTL_MS = 300_000;
 
 export function githubListCacheKey(owner, repo, branch, token) {
   return `${owner}/${repo}@${branch}::${token ? 'auth' : 'anon'}`;

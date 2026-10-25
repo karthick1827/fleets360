@@ -209,6 +209,7 @@ function hydrateFilesFromLocalStorage() {
 }
 
 async function syncFromLiveDisk(quiet = false) {
+  if (Date.now() < (window.__ACL_SYNC_BACKOFF_UNTIL__ || 0)) return false;
   if (isSyncing || isSaving || Date.now() - lastSaveTime < 3500) return false;
   flushActiveEditorToSession();
   const guardActive = isSessionSyncGuarded();
@@ -384,6 +385,9 @@ async function syncFromLiveDisk(quiet = false) {
         const errData = await res.json();
         if (errData && (errData.hint || errData.error)) {
           errHint = errData.hint || errData.error;
+        }
+        if (res.status === 429 || /rate limit/i.test(errHint)) {
+          window.__ACL_SYNC_BACKOFF_UNTIL__ = Date.now() + 180_000;
         }
       } catch (e) {}
       if (!quiet) {
