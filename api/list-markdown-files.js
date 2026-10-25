@@ -242,6 +242,25 @@ async function universalHandler(arg1, arg2) {
         const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`;
         const treeRes = await fetch(treeUrl, { headers });
 
+        if (!treeRes.ok) {
+          const isServerless = Boolean(process.env.VERCEL || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME);
+          const errBody = await treeRes.text().catch(() => '');
+          if (isServerless) {
+            return reply(treeRes.status === 404 ? 404 : 403, {
+              success: false,
+              files: [],
+              source: 'github-error',
+              error: `GitHub tree API failed (${treeRes.status})`,
+              detail: errBody.slice(0, 280),
+              hint: token
+                ? 'Check token has repo or contents:read scope and access to this repository.'
+                : 'Add a Personal Access Token in User Control → GitHub Cloud Sync (required for private repos on Vercel).',
+              repo: `${owner}/${repo}`,
+              branch,
+            });
+          }
+        }
+
         if (treeRes.ok) {
           const treeJson = await treeRes.json();
           const treeItems = treeJson.tree || [];

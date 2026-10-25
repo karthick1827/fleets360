@@ -23,15 +23,16 @@ async function init() {
   } catch (e) {}
   updateDrawerFrameworkVersion();
   updateWorkflowModeUI();
-  fetch('/api/git-details?t=' + Date.now())
+  fetch('/api/git-details?t=' + Date.now(), typeof gitDetailsRequestInit === 'function' ? gitDetailsRequestInit() : {})
     .then((r) => r.json())
     .then((d) => {
+      if (typeof hydrateGithubCloudFromGitDetails === 'function') hydrateGithubCloudFromGitDetails(d);
       const hasCloudPat = Boolean((localStorage.getItem('acl_github_token') || '').trim());
       window.__ACL_GIT_CONNECTED__ =
         Boolean(d && d.repoConnected === true && !d.repoDeleted) || hasCloudPat;
       if (typeof updateNavUserControlCentre === 'function') updateNavUserControlCentre(d);
       if (!window.__ACL_GIT_CONNECTED__) {
-        setSyncStatus('Synced with IDE (Not synced with GitHub)', 'yellow');
+        setSyncStatus('Configure GitHub Cloud Sync in User Control for live repo sync', 'yellow');
       }
     })
     .catch(() => {});
@@ -105,6 +106,19 @@ async function init() {
   window.addEventListener('focus', () => {
     syncFromLiveDisk(true);
   });
+
+  const syncIndicator = document.getElementById('syncStatus');
+  if (syncIndicator) {
+    syncIndicator.style.cursor = 'pointer';
+    syncIndicator.title = 'Click to refresh from GitHub now';
+    syncIndicator.addEventListener('click', () => {
+      if (typeof window.forceGitHubLiveSync === 'function') {
+        window.forceGitHubLiveSync();
+      } else {
+        syncFromLiveDisk(false);
+      }
+    });
+  }
 }
 
 window.addEventListener('DOMContentLoaded', init);

@@ -76,6 +76,11 @@ function clearSessionSyncGuard() {
   } catch (e) {}
 }
 
+function isActiveFileDirtyLocal(lf) {
+  const active = typeof getActiveFile === 'function' ? getActiveFile() : null;
+  return Boolean(active && lf && lf.id === active.id && typeof isDirty !== 'undefined' && isDirty);
+}
+
 function mergeRemoteWithLocalSession(localFiles, remoteFiles) {
   const remoteMap = new Map((remoteFiles || []).map((f) => [fileStorageKey(f), f]));
   const remoteByFilename = new Map(
@@ -83,7 +88,6 @@ function mergeRemoteWithLocalSession(localFiles, remoteFiles) {
   );
   const merged = [];
   const seen = new Set();
-  const guardActive = isSessionSyncGuarded();
 
   for (const lf of localFiles || []) {
     const key = fileStorageKey(lf);
@@ -99,42 +103,44 @@ function mergeRemoteWithLocalSession(localFiles, remoteFiles) {
       merged.push(lf);
       continue;
     }
-    const sessionOwned = Boolean(lf.sessionRevision || lf.sessionFromAtlassian);
     const localLen = (lf.content || '').length;
     const remoteLen = (rf.content || '').length;
     const localEffectivelyEmpty = localLen < 80 && remoteLen > localLen + 40;
-    if (guardActive || sessionOwned) {
+
+    if (isActiveFileDirtyLocal(lf)) {
       merged.push({
         ...rf,
         ...lf,
         folderPath: normalizeStudioFolderPath(lf.folderPath || rf.folderPath),
-        content: localEffectivelyEmpty ? rf.content : lf.content,
-        status: localEffectivelyEmpty
-          ? parseStatusFromMarkdown(rf.content)
-          : lf.status || parseStatusFromMarkdown(lf.content),
-        updatedAt: lf.updatedAt || rf.updatedAt,
-        sessionRevision: lf.sessionRevision,
-        sessionFromAtlassian: lf.sessionFromAtlassian,
-      });
-      continue;
-    }
-    const localTs = Date.parse(lf.updatedAt || 0) || Number(lf.sessionRevision || 0) || 0;
-    const remoteTs = Date.parse(rf.updatedAt || 0) || 0;
-    const localNewer = localTs > remoteTs + 500;
-    const contentDiffers = (lf.content || '') !== (rf.content || '');
-    const keepLocalContent = localNewer || (contentDiffers && localTs >= remoteTs);
-    if (keepLocalContent) {
-      merged.push({
-        ...rf,
         content: lf.content,
         status: lf.status || parseStatusFromMarkdown(lf.content),
         updatedAt: lf.updatedAt || rf.updatedAt,
         sessionRevision: lf.sessionRevision,
       });
+      continue;
+    }
+
+    const localTs = Date.parse(lf.updatedAt || 0) || Number(lf.sessionRevision || 0) || 0;
+    const remoteTs = Date.parse(rf.updatedAt || 0) || 0;
+    const contentDiffers = (lf.content || '') !== (rf.content || '');
+    const remoteNewer = remoteTs > localTs + 500;
+    const adoptRemote = localEffectivelyEmpty || remoteNewer || (contentDiffers && remoteTs >= localTs);
+
+    if (adoptRemote) {
+      merged.push({
+        ...rf,
+        folderPath: normalizeStudioFolderPath(rf.folderPath),
+        status: parseStatusFromMarkdown(rf.content) || rf.status,
+        updatedAt: rf.updatedAt || lf.updatedAt,
+      });
     } else {
       merged.push({
         ...rf,
-        status: parseStatusFromMarkdown(rf.content) || rf.status,
+        ...lf,
+        folderPath: normalizeStudioFolderPath(lf.folderPath || rf.folderPath),
+        content: lf.content,
+        status: lf.status || parseStatusFromMarkdown(lf.content),
+        updatedAt: lf.updatedAt || rf.updatedAt,
       });
     }
   }
@@ -238,6 +244,12 @@ async function syncFromLiveDisk(quiet = false) {
     }
     if (res.ok) {
       const data = await res.json();
+      if (data && data.success === false) {
+        if (!quiet) {
+          setSyncStatus(data.hint || data.error || 'GitHub sync failed', 'red');
+        }
+        return false;
+      }
       if (data && (data.frameworkVersion || data.version)) {
         updateDrawerFrameworkVersion(data.frameworkVersion || data.version);
       }
@@ -352,6 +364,11 @@ async function syncFromLiveDisk(quiet = false) {
             ? `Live GitHub sync () - local edits kept`
             : `Synced live with GitHub (${data.repo || 'origin'})`;
           setSyncStatus(label, guardActive && isDirty ? 'yellow' : 'green');
+        } else if (data.source === 'local-disk') {
+          setSyncStatus(
+            'Showing deploy snapshot (not live GitHub). Add PAT in User Control ? GitHub Cloud Sync.',
+            'yellow',
+          );
         } else {
           const hasCloudToken = Boolean((localStorage.getItem('acl_github_token') || '').trim());
           const isGitConnected = Boolean(window.__ACL_GIT_CONNECTED__) || hasCloudToken;
@@ -365,7 +382,16 @@ async function syncFromLiveDisk(quiet = false) {
         return true;
       }
     }
-    if (!quiet && cloudToken) {
+    if (!res.ok) {
+      let errHint = 'GitHub list sync failed - check Cloud Sync in User Control.';
+      try {
+        const errData = await res.json();
+        if (errData && (errData.hint || errData.error)) {
+          errHint = errData.hint || errData.error;
+        }
+      } catch (e) {}
+      if (!quiet) setSyncStatus(errHint, 'red');
+    } else if (!quiet && cloudToken) {
       setSyncStatus('GitHub list sync failed - check Cloud Sync token and repo settings.', 'red');
     }
   } catch (e) {
@@ -599,13 +625,31 @@ function studioFilesToGitHubEntries(fileList) {
 }
 
 async function ensureGitHubCloudDefaults() {
-  const owner = (localStorage.getItem('acl_github_owner') || '').trim();
-  const repo = (localStorage.getItem('acl_github_repo') || '').trim();
-  if (owner && repo) return;
+  let owner = (localStorage.getItem('acl_github_owner') || '').trim();
+  let repo = (localStorage.getItem('acl_github_repo') || '').trim();
+  let branch = (localStorage.getItem('acl_github_branch') || '').trim();
   try {
-    const res = await fetch('/api/git-details', { cache: 'no-store' });
+    const headers = {};
+    const token = (localStorage.getItem('acl_github_token') || '').trim();
+    if (token) {
+      headers.Authorization = 'Bearer ' + token;
+      headers['X-GitHub-Token'] = token;
+    }
+    const res = await fetch('/api/git-details?t=' + Date.now(), { cache: 'no-store', headers });
     if (!res.ok) return;
     const data = await res.json();
+    if (data.githubOwner && !owner) {
+      owner = data.githubOwner;
+      localStorage.setItem('acl_github_owner', owner);
+    }
+    if (data.githubRepo && !repo) {
+      repo = data.githubRepo;
+      localStorage.setItem('acl_github_repo', repo);
+    }
+    if (data.githubBranch && !branch) {
+      branch = data.githubBranch;
+      localStorage.setItem('acl_github_branch', branch);
+    }
     const origin = data.remoteOrigin || '';
     const m = origin.match(/github\.com[/:]([^/]+)\/([^/.]+)/i);
     if (m) {
@@ -825,5 +869,9 @@ if (typeof window !== 'undefined') {
   window.syncFromLiveDisk = syncFromLiveDisk;
   window.refreshTree = async function (quiet = false) {
     return await syncFromLiveDisk(quiet);
+  };
+  window.forceGitHubLiveSync = async function () {
+    clearSessionSyncGuard();
+    return await syncFromLiveDisk(false);
   };
 }

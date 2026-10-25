@@ -153,7 +153,13 @@ export default async function handler(req, res) {
         process.env.GITHUB_PAT;
 
       if (token) {
-        ghHeaders['Authorization'] = `token ${token}`;
+        const t = String(token).trim();
+        ghHeaders.Authorization =
+          t.startsWith('Bearer ') || t.startsWith('token ')
+            ? t
+            : t.startsWith('ghp_') || t.startsWith('github_pat_')
+              ? `token ${t}`
+              : `Bearer ${t}`;
       }
 
       try {
@@ -193,6 +199,9 @@ export default async function handler(req, res) {
       repoConnected: Boolean(remoteOrigin && repoOwner),
       repoDeleted: false,
       remoteOrigin: remoteOrigin || (repoOwner && repoName ? `https://github.com/${repoOwner}/${repoName}.git` : ''),
+      githubOwner: repoOwner || '',
+      githubRepo: repoName || '',
+      githubBranch: currentBranch || 'main',
       userDetails: {
         username: ghLogin || 'Developer',
         fullName: (ghUserData && ghUserData.name) || gitUserName || ghLogin || 'Developer',

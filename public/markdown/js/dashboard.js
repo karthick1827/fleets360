@@ -1422,6 +1422,72 @@ function gitDetailsRequestInit() {
   return { headers, cache: 'no-store' };
 }
 
+function readGithubCloudSyncConfig() {
+  try {
+    return {
+      token: (localStorage.getItem('acl_github_token') || '').trim(),
+      owner: (localStorage.getItem('acl_github_owner') || '').trim(),
+      repo: (localStorage.getItem('acl_github_repo') || '').trim(),
+      branch: (localStorage.getItem('acl_github_branch') || '').trim() || 'main',
+    };
+  } catch {
+    return { token: '', owner: '', repo: '', branch: 'main' };
+  }
+}
+
+function writeGithubCloudSyncConfig(cfg) {
+  if (!cfg) return;
+  try {
+    if (cfg.token !== undefined) localStorage.setItem('acl_github_token', String(cfg.token || '').trim());
+    if (cfg.owner !== undefined) localStorage.setItem('acl_github_owner', String(cfg.owner || '').trim());
+    if (cfg.repo !== undefined) localStorage.setItem('acl_github_repo', String(cfg.repo || '').trim());
+    if (cfg.branch !== undefined) {
+      localStorage.setItem('acl_github_branch', String(cfg.branch || 'main').trim() || 'main');
+    }
+  } catch (e) {}
+}
+
+function hydrateGithubCloudFromGitDetails(data) {
+  if (!data) return;
+  const cur = readGithubCloudSyncConfig();
+  const next = { ...cur };
+  if (data.githubOwner && !next.owner) next.owner = data.githubOwner;
+  if (data.githubRepo && !next.repo) next.repo = data.githubRepo;
+  if (data.githubBranch && (!next.branch || next.branch === 'main')) next.branch = data.githubBranch;
+  if (!next.owner || !next.repo) {
+    const origin = data.remoteOrigin || '';
+    const m = origin.match(/github\.com[/:]([^/]+)\/([^/.]+)/i);
+    if (m) {
+      if (!next.owner) next.owner = m[1];
+      if (!next.repo) next.repo = m[2].replace(/\.git$/i, '');
+    }
+  }
+  writeGithubCloudSyncConfig(next);
+}
+
+window.saveGithubCloudSync = async function () {
+  const token = document.getElementById('ghCloudToken')?.value?.trim() || '';
+  const owner = document.getElementById('ghCloudOwner')?.value?.trim() || '';
+  const repo = document.getElementById('ghCloudRepo')?.value?.trim() || '';
+  const branch = document.getElementById('ghCloudBranch')?.value?.trim() || 'main';
+  if (!owner || !repo) {
+    alert('Owner and repository name are required.');
+    return;
+  }
+  if (!token) {
+    if (!confirm('No PAT entered. Public repos may work; private repos need a token. Save anyway?')) return;
+  }
+  writeGithubCloudSyncConfig({ token, owner, repo, branch });
+  window.__ACL_GIT_CONNECTED__ = true;
+  if (typeof window.forceGitHubLiveSync === 'function') {
+    await window.forceGitHubLiveSync();
+  } else if (typeof window.syncFromLiveDisk === 'function') {
+    await window.syncFromLiveDisk(false);
+  }
+  alert('GitHub Cloud Sync saved. Live sync is running now.');
+  renderGitDashboard();
+};
+
 function updateNavUserControlCentre(data) {
   const isConnected = Boolean(data && data.repoConnected === true && !data.repoDeleted);
   const hasUser = Boolean(isConnected && data.userDetails && (data.userDetails.fullName || data.userDetails.username));
@@ -1480,7 +1546,11 @@ async function renderGitDashboard() {
     if (!data) {
       data = { isPushed: false, repoConnected: false, userDetails: {}, projectDetails: {}, gitDetails: {} };
     }
-    const isConnected = Boolean(data && data.repoConnected === true && !data.repoDeleted);
+    const cloudCfg = readGithubCloudSyncConfig();
+    hydrateGithubCloudFromGitDetails(data);
+    const cloudCfgAfter = readGithubCloudSyncConfig();
+    const isConnected =
+      Boolean(data && data.repoConnected === true && !data.repoDeleted) || Boolean(cloudCfgAfter.token);
     window.__ACL_GIT_CONNECTED__ = isConnected;
     const isPushed = Boolean(data && data.isPushed);
 
@@ -1700,6 +1770,39 @@ async function renderGitDashboard() {
             </div>
           </div>
 
+        </div>
+
+        <!-- GitHub Cloud Sync (browser PAT — required for live _acl-output on Vercel) -->
+        <div class="git-card" style="margin-top: 1.25rem;">
+          <div class="git-card-header">
+            <div class="git-card-title"><span>☁️</span> GitHub Cloud Sync (Live Studio)</div>
+            <span class="git-read-only-pill">${cloudCfgAfter.token ? '🟢 PAT saved in browser' : '⚪ Not configured'}</span>
+          </div>
+          <p style="font-size: 0.82rem; color: #64748b; margin: 0 0 0.75rem 0;">
+            Vercel cannot read your private repo without a Personal Access Token. This enables <strong>live pull</strong> from GitHub every few seconds and commits from Studio / Jira sync.
+          </p>
+          <div class="atlassian-config-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem;">
+            <div class="atlassian-input-group">
+              <label>GitHub owner</label>
+              <input type="text" id="ghCloudOwner" value="${cloudCfgAfter.owner || ''}" placeholder="karthick1827" />
+            </div>
+            <div class="atlassian-input-group">
+              <label>Repository</label>
+              <input type="text" id="ghCloudRepo" value="${cloudCfgAfter.repo || ''}" placeholder="fleets360" />
+            </div>
+            <div class="atlassian-input-group">
+              <label>Branch</label>
+              <input type="text" id="ghCloudBranch" value="${cloudCfgAfter.branch || 'main'}" placeholder="main" />
+            </div>
+            <div class="atlassian-input-group" style="grid-column: 1 / -1;">
+              <label>Personal access token (repo or contents read/write)</label>
+              <input type="password" id="ghCloudToken" value="${cloudCfgAfter.token || ''}" placeholder="ghp_… or github_pat_…" autocomplete="off" />
+            </div>
+          </div>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem;">
+            <button type="button" class="atlassian-btn-sync jira" onclick="saveGithubCloudSync()" style="width: auto; padding: 0.45rem 1rem;">Save &amp; Sync Now</button>
+            <button type="button" class="git-toggle-btn" onclick="typeof forceGitHubLiveSync==='function'&&forceGitHubLiveSync()" style="padding: 0.45rem 1rem;">↻ Refresh from GitHub</button>
+          </div>
         </div>
 
         <!-- ATLASSIAN JIRA & CONFLUENCE INTEGRATION SUITE -->
