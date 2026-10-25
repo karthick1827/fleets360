@@ -214,22 +214,15 @@ async function syncFromLiveDisk(quiet = false) {
   const guardActive = isSessionSyncGuarded();
   isSyncing = true;
   try {
-    await ensureGitHubCloudDefaults();
-    const cloudToken = (localStorage.getItem('acl_github_token') || '').trim();
-    const cloudOwner = (localStorage.getItem('acl_github_owner') || '').trim();
-    const cloudRepo = (localStorage.getItem('acl_github_repo') || '').trim();
-    const cloudBranch = (localStorage.getItem('acl_github_branch') || '').trim();
+    await ensureLinkedGitHubRepo();
+    const { owner: ghOwner, repo: ghRepo, branch: ghBranch } = getLinkedGitHubRepo();
 
     const headers = { 'Cache-Control': 'no-store' };
-    if (cloudToken) {
-      headers['Authorization'] = 'Bearer ' + cloudToken;
-      headers['X-GitHub-Token'] = cloudToken;
-    }
 
     let queryUrl = '/api/list-markdown-files?t=' + Date.now();
-    if (cloudOwner) queryUrl += '&owner=' + encodeURIComponent(cloudOwner);
-    if (cloudRepo) queryUrl += '&repo=' + encodeURIComponent(cloudRepo);
-    if (cloudBranch) queryUrl += '&branch=' + encodeURIComponent(cloudBranch);
+    if (ghOwner) queryUrl += '&owner=' + encodeURIComponent(ghOwner);
+    if (ghRepo) queryUrl += '&repo=' + encodeURIComponent(ghRepo);
+    if (ghBranch) queryUrl += '&branch=' + encodeURIComponent(ghBranch);
 
     let res = await fetch(queryUrl, { headers, cache: 'no-store' });
     if (!res.ok) {
@@ -366,16 +359,15 @@ async function syncFromLiveDisk(quiet = false) {
           setSyncStatus(label, guardActive && isDirty ? 'yellow' : 'green');
         } else if (data.source === 'local-disk') {
           setSyncStatus(
-            'Showing deploy snapshot (not live GitHub). Add PAT in User Control ? GitHub Cloud Sync.',
+            'Showing deploy snapshot (not live GitHub). Set GITHUB_TOKEN on Vercel and redeploy.',
             'yellow',
           );
         } else {
-          const hasCloudToken = Boolean((localStorage.getItem('acl_github_token') || '').trim());
-          const isGitConnected = Boolean(window.__ACL_GIT_CONNECTED__) || hasCloudToken;
+          const isGitConnected = Boolean(window.__ACL_GIT_CONNECTED__);
           if (isGitConnected) {
             setSyncStatus('Synced with IDE and GitHub', 'green');
           } else {
-            setSyncStatus('Synced with IDE (Not synced with GitHub)', 'yellow');
+            setSyncStatus('Synced with IDE (GitHub live sync via server token)', 'yellow');
           }
         }
         evaluateProceedButton();
@@ -383,7 +375,7 @@ async function syncFromLiveDisk(quiet = false) {
       }
     }
     if (!res.ok) {
-      let errHint = 'GitHub list sync failed - open menu ? User Control Centre ? GitHub Cloud Sync.';
+      let errHint = 'GitHub list sync failed. Ensure GITHUB_TOKEN is set on Vercel.';
       try {
         const errData = await res.json();
         if (errData && (errData.hint || errData.error)) {
@@ -391,14 +383,14 @@ async function syncFromLiveDisk(quiet = false) {
         }
       } catch (e) {}
       if (!quiet) {
-        const needsPat = /auth-required|rate limit|token required/i.test(errHint);
-        setSyncStatus(errHint, needsPat ? 'yellow' : 'red');
+        const soft = /rate limit|config-required|GITHUB_TOKEN/i.test(errHint);
+        setSyncStatus(errHint, soft ? 'yellow' : 'red');
       }
-    } else if (!quiet && cloudToken) {
-      setSyncStatus('GitHub list sync failed - check Cloud Sync token and repo settings.', 'red');
+    } else if (!quiet) {
+      setSyncStatus('GitHub list sync failed.', 'red');
     }
   } catch (e) {
-    if (!quiet && (localStorage.getItem('acl_github_token') || '').trim()) {
+    if (!quiet) {
       setSyncStatus('GitHub live sync error: ' + (e.message || 'network'), 'red');
     }
   } finally {
@@ -439,20 +431,13 @@ async function saveCurrentFile() {
   renderPreview();
   persistFilesToBrowserSession();
 
-  const cloudToken = (localStorage.getItem('acl_github_token') || '').trim();
-  await ensureGitHubCloudDefaults();
-  const cloudOwner = (localStorage.getItem('acl_github_owner') || '').trim();
-  const cloudRepo = (localStorage.getItem('acl_github_repo') || '').trim();
-  const cloudBranch = (localStorage.getItem('acl_github_branch') || '').trim();
+  await ensureLinkedGitHubRepo();
+  const { owner: ghOwner, repo: ghRepo, branch: ghBranch } = getLinkedGitHubRepo();
 
   let resData = { success: true, mode: 'browser-session', gitPushed: false };
   isSaving = true;
   try {
     const headers = { 'Content-Type': 'application/json' };
-    if (cloudToken) {
-      headers['Authorization'] = 'Bearer ' + cloudToken;
-      headers['X-GitHub-Token'] = cloudToken;
-    }
 
     const bodyPayload = {
       folderPath: file.folderPath,
@@ -460,10 +445,9 @@ async function saveCurrentFile() {
       content: file.content,
       status: file.status,
       autoPush: false,
-      githubToken: cloudToken || undefined,
-      githubOwner: cloudOwner || undefined,
-      githubRepo: cloudRepo || undefined,
-      githubBranch: cloudBranch || undefined,
+      githubOwner: ghOwner || undefined,
+      githubRepo: ghRepo || undefined,
+      githubBranch: ghBranch || undefined,
     };
 
     const saveEndpoint = (window.__ACL_LIVE_ENDPOINT__ || '') + '/api/save-markdown';
@@ -481,7 +465,7 @@ async function saveCurrentFile() {
       if (pushed) {
         clearSessionSyncGuard();
         setSyncStatus('Saved to IDE & pushed to GitHub', 'green');
-      } else if (cloudToken && resData.mode === 'github') {
+      } else if (resData.mode === 'github') {
         setSyncStatus('Saved to IDE (GitHub push pending)', 'yellow');
       } else {
         setSyncStatus('Saved in Markdown Studio (browser session)', 'green');
@@ -490,8 +474,8 @@ async function saveCurrentFile() {
       lastSaveTime = Date.now();
       setSyncStatus('Saved in Markdown Studio (save API not deployed yet)', 'yellow');
       resData = { success: true, gitPushed: false, mode: 'browser-session' };
-    } else if (cloudToken) {
-      const errorMsg = resData.error || resData.message || `Server error (${resp.status})`;
+    } else if (resp.status >= 500 || resData.error) {
+      const errorMsg = resData.error || resData.message || resData.hint || `Server error (${resp.status})`;
       showToast(`GitHub save failed: ${errorMsg}`, 'error');
       setSyncStatus(`GitHub save failed: ${errorMsg}`, 'red');
       return false;
@@ -627,18 +611,19 @@ function studioFilesToGitHubEntries(fileList) {
   return out;
 }
 
-async function ensureGitHubCloudDefaults() {
-  let owner = (localStorage.getItem('acl_github_owner') || '').trim();
-  let repo = (localStorage.getItem('acl_github_repo') || '').trim();
-  let branch = (localStorage.getItem('acl_github_branch') || '').trim();
+function getLinkedGitHubRepo() {
+  const mem = window.__ACL_GITHUB_REPO__ || {};
+  return {
+    owner: (mem.owner || localStorage.getItem('acl_github_owner') || '').trim(),
+    repo: (mem.repo || localStorage.getItem('acl_github_repo') || '').trim(),
+    branch: (mem.branch || localStorage.getItem('acl_github_branch') || '').trim() || 'main',
+  };
+}
+
+async function ensureLinkedGitHubRepo() {
+  let { owner, repo, branch } = getLinkedGitHubRepo();
   try {
-    const headers = {};
-    const token = (localStorage.getItem('acl_github_token') || '').trim();
-    if (token) {
-      headers.Authorization = 'Bearer ' + token;
-      headers['X-GitHub-Token'] = token;
-    }
-    const res = await fetch('/api/git-details?t=' + Date.now(), { cache: 'no-store', headers });
+    const res = await fetch('/api/git-details?t=' + Date.now(), { cache: 'no-store' });
     if (!res.ok) return;
     const data = await res.json();
     if (data.githubOwner && !owner) {
@@ -656,14 +641,25 @@ async function ensureGitHubCloudDefaults() {
     const origin = data.remoteOrigin || '';
     const m = origin.match(/github\.com[/:]([^/]+)\/([^/.]+)/i);
     if (m) {
-      if (!owner) localStorage.setItem('acl_github_owner', m[1]);
-      if (!repo) localStorage.setItem('acl_github_repo', m[2].replace(/\.git$/i, ''));
+      if (!owner) {
+        owner = m[1];
+        localStorage.setItem('acl_github_owner', owner);
+      }
+      if (!repo) {
+        repo = m[2].replace(/\.git$/i, '');
+        localStorage.setItem('acl_github_repo', repo);
+      }
     }
+    window.__ACL_GITHUB_REPO__ = {
+      owner: owner || data.githubOwner || '',
+      repo: repo || data.githubRepo || '',
+      branch: branch || data.githubBranch || 'main',
+    };
   } catch (e) {}
 }
 
 /**
- * Commit one or more markdown files to GitHub via /api/save-markdown (requires Cloud Sync token).
+ * Commit one or more markdown files to GitHub via /api/save-markdown (server GITHUB_TOKEN on Vercel).
  */
 async function commitMarkdownEntriesToGitHub(entries) {
   const list = (entries || []).filter((e) => e && e.filename && typeof e.content === 'string');
@@ -671,25 +667,9 @@ async function commitMarkdownEntriesToGitHub(entries) {
     return { success: true, skipped: true, pushed: [], failed: [], reason: 'No files to commit.' };
   }
 
-  const cloudToken = (localStorage.getItem('acl_github_token') || '').trim();
-  const cloudOwner = (localStorage.getItem('acl_github_owner') || '').trim();
-  const cloudRepo = (localStorage.getItem('acl_github_repo') || '').trim();
-  const cloudBranch = (localStorage.getItem('acl_github_branch') || '').trim() || 'main';
-
-  if (!cloudToken) {
-    return {
-      success: false,
-      skipped: true,
-      pushed: [],
-      failed: [],
-      reason: 'Add a GitHub personal access token in User Control (Cloud Sync).',
-    };
-  }
-
-  await ensureGitHubCloudDefaults();
-  const resolvedOwner = (localStorage.getItem('acl_github_owner') || '').trim();
-  const resolvedRepo = (localStorage.getItem('acl_github_repo') || '').trim();
-  const resolvedBranch = (localStorage.getItem('acl_github_branch') || '').trim() || 'main';
+  await ensureLinkedGitHubRepo();
+  const { owner: resolvedOwner, repo: resolvedRepo, branch: resolvedBranch } = getLinkedGitHubRepo();
+  const branch = resolvedBranch || 'main';
 
   const pushed = [];
   const failed = [];
@@ -697,20 +677,15 @@ async function commitMarkdownEntriesToGitHub(entries) {
 
   for (const entry of list) {
     try {
-      const headers = {
-        'Content-Type': 'application/json',
-        Authorization: 'Bearer ' + cloudToken,
-        'X-GitHub-Token': cloudToken,
-      };
+      const headers = { 'Content-Type': 'application/json' };
       const bodyPayload = {
         folderPath: entry.folderPath,
         filename: entry.filename,
         content: entry.content,
         status: entry.status,
-        githubToken: cloudToken,
-        githubOwner: resolvedOwner || cloudOwner || undefined,
-        githubRepo: resolvedRepo || cloudRepo || undefined,
-        githubBranch: resolvedBranch || cloudBranch || undefined,
+        githubOwner: resolvedOwner || undefined,
+        githubRepo: resolvedRepo || undefined,
+        githubBranch: branch,
       };
       const resp = await fetch(saveEndpoint, {
         method: 'POST',
@@ -746,22 +721,20 @@ async function commitMarkdownEntriesToGitHub(entries) {
     pushed,
     failed,
     repo: resolvedOwner && resolvedRepo ? `${resolvedOwner}/${resolvedRepo}` : 'linked repository',
-    branch: resolvedBranch,
+    branch,
+    reason:
+      pushed.length === 0 && failed.length > 0
+        ? failed[0].error
+        : pushed.length === 0
+          ? 'Set GITHUB_TOKEN on Vercel for server-side commits.'
+          : undefined,
   };
 }
 
 async function reconcileSessionWithRemoteSpecs() {
-  const cloudToken = (localStorage.getItem('acl_github_token') || '').trim();
-  if (!cloudToken) return false;
-  await ensureGitHubCloudDefaults();
-  const headers = {
-    'Cache-Control': 'no-store',
-    Authorization: 'Bearer ' + cloudToken,
-    'X-GitHub-Token': cloudToken,
-  };
-  const owner = (localStorage.getItem('acl_github_owner') || '').trim();
-  const repo = (localStorage.getItem('acl_github_repo') || '').trim();
-  const branch = (localStorage.getItem('acl_github_branch') || '').trim();
+  await ensureLinkedGitHubRepo();
+  const headers = { 'Cache-Control': 'no-store' };
+  const { owner, repo, branch } = getLinkedGitHubRepo();
   let queryUrl = '/api/list-markdown-files?t=' + Date.now();
   if (owner) queryUrl += '&owner=' + encodeURIComponent(owner);
   if (repo) queryUrl += '&repo=' + encodeURIComponent(repo);

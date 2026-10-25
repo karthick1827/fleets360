@@ -2,6 +2,7 @@
 // Works seamlessly across Vercel, Netlify, AWS Lambda, Firebase Functions, and local Node.js
 import fs from 'node:fs';
 import path from 'node:path';
+import { resolveGithubAccessToken } from '../tools/github-token.mjs';
 
 async function universalHandler(arg1, arg2) {
   const corsHeaders = {
@@ -158,16 +159,11 @@ async function universalHandler(arg1, arg2) {
     const rawBodyToken = (payload && payload.githubToken) || '';
     const qToken = qParams.token;
 
-    const token = (
-      rawCustomToken ||
-      rawHeaderAuth.replace(/^Bearer\s+/i, '').replace(/^token\s+/i, '') ||
-      rawBodyToken ||
-      qToken ||
-      process.env.GITHUB_TOKEN ||
-      process.env.GH_TOKEN ||
-      process.env.GITHUB_PAT ||
-      ''
-    ).trim();
+    const token = resolveGithubAccessToken({
+      headers: rawHeaders,
+      queryToken: qToken,
+      bodyToken: rawBodyToken,
+    });
 
     let owner = (
       (payload && payload.githubOwner) ||
@@ -232,7 +228,7 @@ async function universalHandler(arg1, arg2) {
         return reply(400, {
           success: false,
           error: 'No GitHub repository specified for cloud commit.',
-          hint: 'Please configure GITHUB_OWNER and GITHUB_REPO in environment variables, or enter them in Markdown Studio Cloud Sync settings.',
+          hint: 'Link the Vercel project to GitHub or set GITHUB_OWNER and GITHUB_REPO in environment variables.',
         });
       }
       const authHeader =
@@ -259,7 +255,7 @@ async function universalHandler(arg1, arg2) {
         } else if (getRes.status === 401) {
           return reply(401, {
             success: false,
-            error: 'GitHub Token is invalid or expired. Please check your token or re-enter it in Cloud Sync Settings.',
+            error: 'GitHub token is invalid or expired. Update GITHUB_TOKEN in Vercel environment variables.',
           });
         } else if (getRes.status === 403) {
           const errBody = await getRes.text();
@@ -342,7 +338,7 @@ async function universalHandler(arg1, arg2) {
         path: repoFilePath,
         status: status,
         warning:
-          'Saved to local disk only. To enable cloud commits on Vercel or Netlify, configure GITHUB_TOKEN in platform environment variables or enter it in Markdown Studio Cloud Sync settings.',
+          'Saved to local disk only. On Vercel, set GITHUB_TOKEN in project environment variables and redeploy.',
       });
     } catch {
       if (isServerless) {
@@ -354,14 +350,13 @@ async function universalHandler(arg1, arg2) {
           path: repoFilePath,
           status,
           message:
-            'Saved in Markdown Studio (this browser). Use Cloud Sync with a GitHub token to commit changes to the repository.',
+            'Saved in Markdown Studio (this browser). Set GITHUB_TOKEN on Vercel to commit to the repository.',
         });
       }
       return reply(500, {
         success: false,
-        error:
-          'GITHUB_TOKEN is missing. Click "🐙 Cloud Sync" in the top header to enter your token, or add GITHUB_TOKEN in your platform settings.',
-        hint: 'Click "🐙 Cloud Sync" in the top bar to paste your GitHub token.',
+        error: 'GITHUB_TOKEN is missing.',
+        hint: 'Add GITHUB_TOKEN (repo or contents:write) in Vercel Project → Settings → Environment Variables, then redeploy.',
       });
     }
   } catch (err) {

@@ -2,6 +2,7 @@
 // Works seamlessly across Vercel, Netlify, AWS Lambda, Firebase Functions, and local Node.js
 import fs from 'node:fs';
 import path from 'node:path';
+import { resolveGithubAccessToken } from '../tools/github-token.mjs';
 
 /** Short-lived cache — reduces GitHub API calls (Vercel shared IP hits rate limits fast). */
 const githubListCache = new Map();
@@ -191,15 +192,10 @@ async function universalHandler(arg1, arg2) {
     const rawHeaderAuth = rawHeaders['authorization'] || rawHeaders['Authorization'] || '';
     const rawCustomToken = rawHeaders['x-github-token'] || rawHeaders['X-GitHub-Token'] || '';
 
-    const token = (
-      rawCustomToken ||
-      rawHeaderAuth.replace(/^Bearer\s+/i, '').replace(/^token\s+/i, '') ||
-      qToken ||
-      process.env.GITHUB_TOKEN ||
-      process.env.GH_TOKEN ||
-      process.env.GITHUB_PAT ||
-      ''
-    ).trim();
+    const token = resolveGithubAccessToken({
+      headers: rawHeaders,
+      queryToken: qToken,
+    });
 
     let owner = (qOwner || process.env.GITHUB_OWNER || process.env.VERCEL_GIT_REPO_OWNER || '').trim();
     let repo = (qRepo || process.env.GITHUB_REPO || process.env.VERCEL_GIT_REPO_SLUG || '').trim();
@@ -250,12 +246,13 @@ async function universalHandler(arg1, arg2) {
       try {
         const isServerless = Boolean(process.env.VERCEL || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME);
         if (isServerless && !token) {
-          return reply(401, {
+          return reply(503, {
             success: false,
             files: [],
-            source: 'github-auth-required',
-            error: 'GitHub token required for live sync on Vercel.',
-            hint: 'Open the menu → User Control Centre → GitHub Cloud Sync, enter a PAT (repo or contents:read), then Save & Sync Now.',
+            source: 'github-config-required',
+            error: 'Live GitHub sync is not configured on the server.',
+            hint:
+              'Add GITHUB_TOKEN (repo or contents:read) to Vercel Project → Settings → Environment Variables, then redeploy.',
             repo: `${owner}/${repo}`,
             branch,
           });
@@ -286,11 +283,10 @@ async function universalHandler(arg1, arg2) {
         if (!treeRes.ok) {
           const errBody = await treeRes.text().catch(() => '');
           let hint = token
-            ? 'Check token has repo or contents:read scope and access to this repository.'
-            : 'Add a Personal Access Token in User Control → GitHub Cloud Sync.';
+            ? 'Check GITHUB_TOKEN has repo or contents:read scope for this repository.'
+            : 'Set GITHUB_TOKEN in Vercel environment variables.';
           if (/rate limit/i.test(errBody)) {
-            hint =
-              'GitHub API rate limit exceeded. Save your own PAT under User Control → GitHub Cloud Sync (uses your quota instead of Vercel shared IP). Wait a few minutes if you just hit the limit.';
+            hint = 'GitHub API rate limit exceeded. Wait a few minutes or use a GITHUB_TOKEN with higher quota.';
           }
           if (isServerless) {
             return reply(treeRes.status === 404 ? 404 : 403, {
@@ -434,7 +430,7 @@ async function universalHandler(arg1, arg2) {
         success: false,
         files: [],
         error: 'No GitHub repository specified.',
-        hint: 'Please configure GITHUB_OWNER and GITHUB_REPO in environment variables, or enter them in Markdown Studio Cloud Sync settings.',
+        hint: 'Link the Vercel project to GitHub or set GITHUB_OWNER and GITHUB_REPO in environment variables.',
       });
     }
 

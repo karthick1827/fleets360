@@ -1414,31 +1414,24 @@ function renderDeveloperDashboard() {
 // User Control Centre (Git Identity & Permissions Dashboard)
 // ===================================================
 function gitDetailsRequestInit() {
-  const headers = {};
-  try {
-    const token = (localStorage.getItem('acl_github_token') || '').trim();
-    if (token) headers['X-GitHub-Token'] = token;
-  } catch (e) {}
-  return { headers, cache: 'no-store' };
+  return { cache: 'no-store' };
 }
 
-function readGithubCloudSyncConfig() {
+function readGithubRepoConfig() {
   try {
     return {
-      token: (localStorage.getItem('acl_github_token') || '').trim(),
       owner: (localStorage.getItem('acl_github_owner') || '').trim(),
       repo: (localStorage.getItem('acl_github_repo') || '').trim(),
       branch: (localStorage.getItem('acl_github_branch') || '').trim() || 'main',
     };
   } catch {
-    return { token: '', owner: '', repo: '', branch: 'main' };
+    return { owner: '', repo: '', branch: 'main' };
   }
 }
 
-function writeGithubCloudSyncConfig(cfg) {
+function writeGithubRepoConfig(cfg) {
   if (!cfg) return;
   try {
-    if (cfg.token !== undefined) localStorage.setItem('acl_github_token', String(cfg.token || '').trim());
     if (cfg.owner !== undefined) localStorage.setItem('acl_github_owner', String(cfg.owner || '').trim());
     if (cfg.repo !== undefined) localStorage.setItem('acl_github_repo', String(cfg.repo || '').trim());
     if (cfg.branch !== undefined) {
@@ -1447,9 +1440,9 @@ function writeGithubCloudSyncConfig(cfg) {
   } catch (e) {}
 }
 
-function hydrateGithubCloudFromGitDetails(data) {
+function hydrateGithubRepoFromGitDetails(data) {
   if (!data) return;
-  const cur = readGithubCloudSyncConfig();
+  const cur = readGithubRepoConfig();
   const next = { ...cur };
   if (data.githubOwner && !next.owner) next.owner = data.githubOwner;
   if (data.githubRepo && !next.repo) next.repo = data.githubRepo;
@@ -1462,31 +1455,9 @@ function hydrateGithubCloudFromGitDetails(data) {
       if (!next.repo) next.repo = m[2].replace(/\.git$/i, '');
     }
   }
-  writeGithubCloudSyncConfig(next);
+  writeGithubRepoConfig(next);
+  window.__ACL_GITHUB_REPO__ = { owner: next.owner, repo: next.repo, branch: next.branch };
 }
-
-window.saveGithubCloudSync = async function () {
-  const token = document.getElementById('ghCloudToken')?.value?.trim() || '';
-  const owner = document.getElementById('ghCloudOwner')?.value?.trim() || '';
-  const repo = document.getElementById('ghCloudRepo')?.value?.trim() || '';
-  const branch = document.getElementById('ghCloudBranch')?.value?.trim() || 'main';
-  if (!owner || !repo) {
-    alert('Owner and repository name are required.');
-    return;
-  }
-  if (!token) {
-    if (!confirm('No PAT entered. Public repos may work; private repos need a token. Save anyway?')) return;
-  }
-  writeGithubCloudSyncConfig({ token, owner, repo, branch });
-  window.__ACL_GIT_CONNECTED__ = true;
-  if (typeof window.forceGitHubLiveSync === 'function') {
-    await window.forceGitHubLiveSync();
-  } else if (typeof window.syncFromLiveDisk === 'function') {
-    await window.syncFromLiveDisk(false);
-  }
-  alert('GitHub Cloud Sync saved. Live sync is running now.');
-  renderGitDashboard();
-};
 
 function updateNavUserControlCentre(data) {
   const isConnected = Boolean(data && data.repoConnected === true && !data.repoDeleted);
@@ -1546,11 +1517,8 @@ async function renderGitDashboard() {
     if (!data) {
       data = { isPushed: false, repoConnected: false, userDetails: {}, projectDetails: {}, gitDetails: {} };
     }
-    const cloudCfg = readGithubCloudSyncConfig();
-    hydrateGithubCloudFromGitDetails(data);
-    const cloudCfgAfter = readGithubCloudSyncConfig();
-    const isConnected =
-      Boolean(data && data.repoConnected === true && !data.repoDeleted) || Boolean(cloudCfgAfter.token);
+    hydrateGithubRepoFromGitDetails(data);
+    const isConnected = Boolean(data && data.repoConnected === true && !data.repoDeleted);
     window.__ACL_GIT_CONNECTED__ = isConnected;
     const isPushed = Boolean(data && data.isPushed);
 
@@ -1772,37 +1740,9 @@ async function renderGitDashboard() {
 
         </div>
 
-        <!-- GitHub Cloud Sync (browser PAT — required for live _acl-output on Vercel) -->
-        <div class="git-card" style="margin-top: 1.25rem;">
-          <div class="git-card-header">
-            <div class="git-card-title"><span>☁️</span> GitHub Cloud Sync (Live Studio)</div>
-            <span class="git-read-only-pill">${cloudCfgAfter.token ? '🟢 PAT saved in browser' : '⚪ Not configured'}</span>
-          </div>
-          <p style="font-size: 0.82rem; color: #64748b; margin: 0 0 0.75rem 0;">
-            Vercel cannot read your private repo without a Personal Access Token. This enables <strong>live pull</strong> from GitHub every few seconds and commits from Studio / Jira sync.
-          </p>
-          <div class="atlassian-config-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem;">
-            <div class="atlassian-input-group">
-              <label>GitHub owner</label>
-              <input type="text" id="ghCloudOwner" value="${cloudCfgAfter.owner || ''}" placeholder="karthick1827" />
-            </div>
-            <div class="atlassian-input-group">
-              <label>Repository</label>
-              <input type="text" id="ghCloudRepo" value="${cloudCfgAfter.repo || ''}" placeholder="fleets360" />
-            </div>
-            <div class="atlassian-input-group">
-              <label>Branch</label>
-              <input type="text" id="ghCloudBranch" value="${cloudCfgAfter.branch || 'main'}" placeholder="main" />
-            </div>
-            <div class="atlassian-input-group" style="grid-column: 1 / -1;">
-              <label>Personal access token (repo or contents read/write)</label>
-              <input type="password" id="ghCloudToken" value="${cloudCfgAfter.token || ''}" placeholder="ghp_… or github_pat_…" autocomplete="off" />
-            </div>
-          </div>
-          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem;">
-            <button type="button" class="atlassian-btn-sync jira" onclick="saveGithubCloudSync()" style="width: auto; padding: 0.45rem 1rem;">Save &amp; Sync Now</button>
-            <button type="button" class="git-toggle-btn" onclick="typeof forceGitHubLiveSync==='function'&&forceGitHubLiveSync()" style="padding: 0.45rem 1rem;">↻ Refresh from GitHub</button>
-          </div>
+        <div style="margin-top: 1rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+          <button type="button" class="git-toggle-btn" onclick="typeof forceGitHubLiveSync==='function'&&forceGitHubLiveSync()" style="padding: 0.45rem 1rem;">↻ Refresh _acl-output from GitHub</button>
+          <span style="font-size: 0.78rem; color: #64748b;">Live sync runs automatically (~30s on Vercel). Server needs <code>GITHUB_TOKEN</code> in Vercel env.</span>
         </div>
 
         <!-- ATLASSIAN JIRA & CONFLUENCE INTEGRATION SUITE -->
@@ -1976,11 +1916,11 @@ function getAtlassianWorkspaceFiles() {
 
 function githubSyncContext() {
   try {
+    const cfg = readGithubRepoConfig();
     return {
-      githubToken: (localStorage.getItem('acl_github_token') || '').trim() || undefined,
-      githubOwner: (localStorage.getItem('acl_github_owner') || '').trim() || undefined,
-      githubRepo: (localStorage.getItem('acl_github_repo') || '').trim() || undefined,
-      githubBranch: (localStorage.getItem('acl_github_branch') || '').trim() || undefined,
+      githubOwner: cfg.owner || undefined,
+      githubRepo: cfg.repo || undefined,
+      githubBranch: cfg.branch || undefined,
     };
   } catch {
     return {};
@@ -1998,10 +1938,6 @@ async function ensureAtlassianWorkspaceFiles() {
 
   const headers = { 'Cache-Control': 'no-store' };
   const gh = githubSyncContext();
-  if (gh.githubToken) {
-    headers.Authorization = 'Bearer ' + gh.githubToken;
-    headers['X-GitHub-Token'] = gh.githubToken;
-  }
 
   let queryUrl = '/api/list-markdown-files?t=' + Date.now();
   if (gh.githubOwner) queryUrl += '&owner=' + encodeURIComponent(gh.githubOwner);
@@ -2061,7 +1997,7 @@ async function appendGitHubCommitMessageForClientFiles(bannerMsg, clientFiles) {
   if (!entries.length) return bannerMsg;
   const gh = await window.commitMarkdownEntriesToGitHub(entries);
   if (gh.skipped) {
-    return bannerMsg + ' ⚠️ GitHub: ' + (gh.reason || 'Cloud Sync not configured.');
+    return bannerMsg + ' ⚠️ GitHub: ' + (gh.reason || 'Set GITHUB_TOKEN on Vercel.');
   }
   if (gh.success) {
     return bannerMsg + ` ✅ GitHub: committed ${gh.pushed.length} file(s) to ${gh.repo}@${gh.branch}.`;
@@ -2576,7 +2512,7 @@ window.executeJiraSync = async function () {
       let pushBanner = `🎯 Successfully synced ${result.totalStories} story file(s) to JIRA (${result.projectKey}) — in-place updates, no duplicates.`;
       const gh = await commitSessionWorkspaceToGitHub();
       if (gh && gh.skipped) {
-        pushBanner += ' ⚠️ GitHub: ' + (gh.reason || 'Cloud Sync not configured.');
+        pushBanner += ' ⚠️ GitHub: ' + (gh.reason || 'Set GITHUB_TOKEN on Vercel.');
       } else if (gh && gh.success) {
         pushBanner += ` ✅ GitHub: committed ${gh.pushed.length} file(s).`;
       } else if (gh && gh.failed && gh.failed.length) {
@@ -2717,7 +2653,7 @@ window.executeConfluenceSync = async function () {
       let confPushBanner = `📘 Successfully synced ${result.totalPages} Phase Deliverables to Confluence Space ${result.spaceKey} ${detailMsg}`;
       const gh = await commitSessionWorkspaceToGitHub();
       if (gh && gh.skipped) {
-        confPushBanner += ' ⚠️ GitHub: ' + (gh.reason || 'Cloud Sync not configured.');
+        confPushBanner += ' ⚠️ GitHub: ' + (gh.reason || 'Set GITHUB_TOKEN on Vercel.');
       } else if (gh && gh.success) {
         confPushBanner += ` ✅ GitHub: committed ${gh.pushed.length} file(s).`;
       } else if (gh && gh.failed && gh.failed.length) {

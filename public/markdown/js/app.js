@@ -26,13 +26,11 @@ async function init() {
   fetch('/api/git-details?t=' + Date.now(), typeof gitDetailsRequestInit === 'function' ? gitDetailsRequestInit() : {})
     .then((r) => r.json())
     .then((d) => {
-      if (typeof hydrateGithubCloudFromGitDetails === 'function') hydrateGithubCloudFromGitDetails(d);
-      const hasCloudPat = Boolean((localStorage.getItem('acl_github_token') || '').trim());
-      window.__ACL_GIT_CONNECTED__ =
-        Boolean(d && d.repoConnected === true && !d.repoDeleted) || hasCloudPat;
+      if (typeof hydrateGithubRepoFromGitDetails === 'function') hydrateGithubRepoFromGitDetails(d);
+      window.__ACL_GIT_CONNECTED__ = Boolean(d && d.repoConnected === true && !d.repoDeleted);
       if (typeof updateNavUserControlCentre === 'function') updateNavUserControlCentre(d);
       if (!window.__ACL_GIT_CONNECTED__) {
-        setSyncStatus('Configure GitHub Cloud Sync in User Control for live repo sync', 'yellow');
+        setSyncStatus('Link this Vercel project to GitHub for automatic live sync', 'yellow');
       }
     })
     .catch(() => {});
@@ -113,12 +111,6 @@ async function init() {
     syncIndicator.style.cursor = 'pointer';
     syncIndicator.title = 'Click to refresh from GitHub now';
     syncIndicator.addEventListener('click', () => {
-      const hasPat = Boolean((localStorage.getItem('acl_github_token') || '').trim());
-      if (!hasPat && typeof switchAppView === 'function') {
-        switchAppView('dashboard-git');
-        setSyncStatus('Add GitHub PAT below, then Save & Sync Now', 'yellow');
-        return;
-      }
       if (typeof window.forceGitHubLiveSync === 'function') {
         window.forceGitHubLiveSync();
       } else {
