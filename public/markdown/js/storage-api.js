@@ -78,14 +78,23 @@ function clearSessionSyncGuard() {
 
 function mergeRemoteWithLocalSession(localFiles, remoteFiles) {
   const remoteMap = new Map((remoteFiles || []).map((f) => [fileStorageKey(f), f]));
+  const remoteByFilename = new Map(
+    (remoteFiles || []).map((f) => [(f.filename || '').toLowerCase(), f]),
+  );
   const merged = [];
   const seen = new Set();
   const guardActive = isSessionSyncGuarded();
 
   for (const lf of localFiles || []) {
     const key = fileStorageKey(lf);
-    const rf = remoteMap.get(key);
+    let rf = remoteMap.get(key);
+    if (!rf) {
+      rf = remoteByFilename.get((lf.filename || '').toLowerCase());
+    }
     seen.add(key);
+    if (rf) {
+      seen.add(fileStorageKey(rf));
+    }
     if (!rf) {
       merged.push(lf);
       continue;
@@ -196,20 +205,10 @@ function hydrateFilesFromLocalStorage() {
 async function syncFromLiveDisk(quiet = false) {
   if (isSyncing || isSaving || Date.now() - lastSaveTime < 3500) return false;
   flushActiveEditorToSession();
-  if (isSessionSyncGuarded()) {
-    try {
-      localStorage.setItem('acl_adlc_project_markdown_files', JSON.stringify(files));
-    } catch (e) {}
-    if (!quiet) {
-      setSyncStatus(
-        'Studio session kept (Jira/Confluence edits). Push to JIRA/Confluence or Save to persist; clear guard via Save to GitHub.',
-        'yellow',
-      );
-    }
-    return false;
-  }
+  const guardActive = isSessionSyncGuarded();
   isSyncing = true;
   try {
+    await ensureGitHubCloudDefaults();
     const cloudToken = (localStorage.getItem('acl_github_token') || '').trim();
     const cloudOwner = (localStorage.getItem('acl_github_owner') || '').trim();
     const cloudRepo = (localStorage.getItem('acl_github_repo') || '').trim();
@@ -318,6 +317,7 @@ async function syncFromLiveDisk(quiet = false) {
           const prevActiveFile = files.find((f) => f.id === activeFileId);
           files =
             files.length > 0 ? mergeRemoteWithLocalSession(files, normIncoming) : normIncoming;
+          files = dedupeSessionFilesByFilename(files);
           try {
             localStorage.setItem('acl_adlc_project_markdown_files', JSON.stringify(files));
           } catch (e) {}
@@ -345,9 +345,16 @@ async function syncFromLiveDisk(quiet = false) {
           }
         }
         if (data && data.source === 'github') {
-          setSyncStatus(`Synced live with GitHub (${data.repo || 'origin'})`, 'green');
+          if (!isDirty && !guardActive) {
+            clearSessionSyncGuard();
+          }
+          const label = guardActive && isDirty
+            ? `Live GitHub sync () - local edits kept`
+            : `Synced live with GitHub (${data.repo || 'origin'})`;
+          setSyncStatus(label, guardActive && isDirty ? 'yellow' : 'green');
         } else {
-          const isGitConnected = Boolean(window.__ACL_GIT_CONNECTED__);
+          const hasCloudToken = Boolean((localStorage.getItem('acl_github_token') || '').trim());
+          const isGitConnected = Boolean(window.__ACL_GIT_CONNECTED__) || hasCloudToken;
           if (isGitConnected) {
             setSyncStatus('Synced with IDE and GitHub', 'green');
           } else {
@@ -358,7 +365,13 @@ async function syncFromLiveDisk(quiet = false) {
         return true;
       }
     }
+    if (!quiet && cloudToken) {
+      setSyncStatus('GitHub list sync failed - check Cloud Sync token and repo settings.', 'red');
+    }
   } catch (e) {
+    if (!quiet && (localStorage.getItem('acl_github_token') || '').trim()) {
+      setSyncStatus('GitHub live sync error: ' + (e.message || 'network'), 'red');
+    }
   } finally {
     isSyncing = false;
   }

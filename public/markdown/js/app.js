@@ -26,33 +26,15 @@ async function init() {
   fetch('/api/git-details?t=' + Date.now())
     .then((r) => r.json())
     .then((d) => {
-      window.__ACL_GIT_CONNECTED__ = Boolean(d && d.repoConnected === true && !d.repoDeleted);
+      const hasCloudPat = Boolean((localStorage.getItem('acl_github_token') || '').trim());
+      window.__ACL_GIT_CONNECTED__ =
+        Boolean(d && d.repoConnected === true && !d.repoDeleted) || hasCloudPat;
       if (typeof updateNavUserControlCentre === 'function') updateNavUserControlCentre(d);
       if (!window.__ACL_GIT_CONNECTED__) {
         setSyncStatus('Synced with IDE (Not synced with GitHub)', 'yellow');
-      } else {
-        setSyncStatus('Synced with IDE and GitHub', 'green');
       }
     })
     .catch(() => {});
-  try {
-    if (localStorage.getItem('acl_session_sync_guard') && typeof window.armSessionSyncGuard === 'function') {
-      window.armSessionSyncGuard();
-    } else {
-      const cachedForGuard = localStorage.getItem('acl_adlc_project_markdown_files');
-      if (cachedForGuard) {
-        const parsedGuard = JSON.parse(cachedForGuard);
-        if (
-          Array.isArray(parsedGuard) &&
-          parsedGuard.some((f) => f.sessionRevision || f.sessionFromAtlassian) &&
-          typeof window.armSessionSyncGuard === 'function'
-        ) {
-          window.armSessionSyncGuard();
-        }
-      }
-    }
-  } catch (e) {}
-
   const hydrated =
     typeof window.hydrateFilesFromLocalStorage === 'function' && window.hydrateFilesFromLocalStorage();
 
@@ -63,9 +45,7 @@ async function init() {
     } catch (e) {}
   }
 
-  const synced = hydrated && typeof window.isSessionSyncGuarded === 'function' && window.isSessionSyncGuarded()
-    ? false
-    : await syncFromLiveDisk(true);
+  const synced = await syncFromLiveDisk(true);
 
   if ((!synced || hydrated) && files.length === 0) {
     if (!hydrated) {

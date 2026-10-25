@@ -236,7 +236,11 @@ async function universalHandler(arg1, arg2) {
         });
       }
       const authHeader =
-        token.startsWith('Bearer ') || token.startsWith('token ') ? token : token.startsWith('ghp_') ? `token ${token}` : `Bearer ${token}`;
+        token.startsWith('Bearer ') || token.startsWith('token ')
+          ? token
+          : token.startsWith('ghp_') || token.startsWith('github_pat_')
+            ? `token ${token}`
+            : `Bearer ${token}`;
 
       const headers = {
         Accept: 'application/vnd.github.v3+json',

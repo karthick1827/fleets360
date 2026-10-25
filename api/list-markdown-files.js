@@ -234,7 +234,7 @@ async function universalHandler(arg1, arg2) {
           headers.Authorization =
             token.startsWith('Bearer ') || token.startsWith('token ')
               ? token
-              : token.startsWith('ghp_')
+              : token.startsWith('ghp_') || token.startsWith('github_pat_')
                 ? `token ${token}`
                 : `Bearer ${token}`;
         }
