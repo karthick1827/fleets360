@@ -112,8 +112,7 @@ export function getAtlassianConfig(projectRoot) {
 }
 
 export async function validateAtlassianConfig(config) {
-  const isDemoOnly = Boolean(config.isDemoMode && !config.domain && !config.email);
-  if (isDemoOnly) {
+  if (Boolean(config.isDemoMode)) {
     return { valid: true, message: 'Sandbox Simulation Mode active' };
   }
   let domain = (config.domain || '').trim();
@@ -220,6 +219,22 @@ export async function validateAtlassianConfig(config) {
 }
 
 export async function saveAtlassianConfig(projectRoot, config) {
+  if (config.isDemoMode) {
+    const demoSaved = {
+      domain: config.domain || '',
+      email: config.email || '',
+      apiToken: '',
+      jiraProjectKey: (config.jiraProjectKey || 'DEMO').toUpperCase(),
+      confluenceSpaceKey: (config.confluenceSpaceKey || 'DEMO').toUpperCase(),
+      isDemoMode: true,
+      connected: true,
+      lastSynced: null,
+      lastError: null,
+    };
+    safeWriteAclJson(projectRoot, 'atlassian-config.json', demoSaved);
+    return demoSaved;
+  }
+
   if (!config.connected && !config.domain && !config.email) {
     const cleared = {
       domain: '',
