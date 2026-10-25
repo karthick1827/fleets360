@@ -1743,6 +1743,55 @@ function readAtlassianClientConfig() {
   }
 }
 
+function writeAtlassianClientConfig(config) {
+  if (!config || typeof config !== 'object') return;
+  try {
+    localStorage.setItem('__acl_atlassian_config__', JSON.stringify(config));
+  } catch (e) {}
+}
+
+function isAtlassianConfigUsable(cfg) {
+  if (!cfg || typeof cfg !== 'object') return false;
+  if (cfg.isDemoMode) return true;
+  return Boolean((cfg.domain || '').trim() && (cfg.email || '').trim() && (cfg.apiToken || '').trim());
+}
+
+function isAtlassianConfigConnected(cfg) {
+  if (!isAtlassianConfigUsable(cfg)) return false;
+  return Boolean(cfg.connected !== false);
+}
+
+/** Serverless GET /api/atlassian-config is often empty; browser localStorage is the source of truth. */
+function mergeAtlassianConfig(serverCfg, localCfg) {
+  const server = serverCfg && typeof serverCfg === 'object' ? serverCfg : {};
+  const local = localCfg && typeof localCfg === 'object' ? localCfg : {};
+  const serverUsable = isAtlassianConfigUsable(server) && isAtlassianConfigConnected(server);
+  const localUsable = isAtlassianConfigUsable(local);
+
+  if (localUsable && !serverUsable) {
+    return {
+      ...server,
+      ...local,
+      connected: true,
+      apiToken: local.apiToken || server.apiToken || '',
+    };
+  }
+  if (localUsable && serverUsable) {
+    return {
+      ...server,
+      ...local,
+      connected: true,
+      apiToken: local.apiToken || server.apiToken || '',
+      jiraProjectKey: local.jiraProjectKey || server.jiraProjectKey || '',
+      confluenceSpaceKey: local.confluenceSpaceKey || server.confluenceSpaceKey || '',
+    };
+  }
+  if (serverUsable) {
+    return { ...local, ...server, connected: true };
+  }
+  return { ...server, ...local };
+}
+
 function readAtlassianClientMapping() {
   try {
     const raw = localStorage.getItem('__acl_atlassian_mapping__');
@@ -2079,12 +2128,11 @@ async function renderAtlassianSuite(isPushed) {
       safeFetchJson('/api/atlassian-sync-history'),
     ]);
 
-    let cfgRes = cfgResRaw.ok ? cfgResRaw.data : {};
-    if (!cfgRes || Object.keys(cfgRes).length === 0) {
-      try {
-        const localCfg = localStorage.getItem('__acl_atlassian_config__');
-        if (localCfg) cfgRes = JSON.parse(localCfg);
-      } catch (e) {}
+    const serverCfg = cfgResRaw.ok && cfgResRaw.data ? cfgResRaw.data : {};
+    let cfgRes = mergeAtlassianConfig(serverCfg, readAtlassianClientConfig());
+    if (isAtlassianConfigUsable(cfgRes)) {
+      cfgRes.connected = true;
+      writeAtlassianClientConfig(cfgRes);
     }
     const discRes = discResRaw.ok ? discResRaw.data : { epics: [], stories: [], deliverables: [] };
     const histRes = mergeAtlassianHistory(
@@ -2095,7 +2143,7 @@ async function renderAtlassianSuite(isPushed) {
     const epicsCount = 0;
     const storiesCount = discRes.storyCount || (discRes.stories || []).length;
     const deliverablesCount = discRes.deliverableCount || (discRes.deliverables || []).length;
-    const isConnected = Boolean(cfgRes.connected && cfgRes.domain && cfgRes.email);
+    const isConnected = isAtlassianConfigConnected(cfgRes);
     const isDemo = Boolean(cfgRes.isDemoMode);
 
     let statusBadgeHtml = '';
@@ -2356,28 +2404,40 @@ window.saveAtlassianConfig = async function (e) {
     });
 
     if (res.ok && res.data && res.data.success && res.data.config && res.data.config.connected) {
-      try {
-        localStorage.setItem('__acl_atlassian_config__', JSON.stringify(res.data.config));
-      } catch (e) {}
+      const saved = {
+        ...res.data.config,
+        apiToken: res.data.config.apiToken || apiToken || '',
+        connected: true,
+      };
+      writeAtlassianClientConfig(saved);
       alert('✅ Atlassian credentials verified and workspace keys saved successfully!');
       renderAtlassianSuite(true);
+    } else if ((res.status === 404 || res.status === 0) && isAtlassianConfigUsable(payload)) {
+      const localOnly = { ...payload, connected: true, clientPersisted: true };
+      writeAtlassianClientConfig(localOnly);
+      alert(
+        '✅ Credentials saved in this browser. Server verify was unavailable; sync will still use your saved settings.',
+      );
+      renderAtlassianSuite(true);
     } else {
-      try {
-        localStorage.removeItem('__acl_atlassian_config__');
-      } catch (e) {}
       let errMsg = (res.data && res.data.error) || (res.data && res.data.message) || 'Server returned HTTP ' + res.status;
       if (res.status === 404) {
         errMsg =
           'API route not found (HTTP 404). On Vercel, confirm Root Directory is the repo root (not dist/), redeploy, and check Deployment → Serverless Functions lists /api/atlassian-config.';
       }
+      if (res.status === 400 || (res.data && res.data.error)) {
+        writeAtlassianClientConfig({ ...payload, connected: false, lastError: errMsg });
+      }
       alert('⚠️ Error saving configuration: ' + errMsg);
       renderAtlassianSuite(true);
     }
   } catch (err) {
-    try {
-      localStorage.removeItem('__acl_atlassian_config__');
-    } catch (e) {}
-    alert('⚠️ Failed to save Atlassian configuration: ' + err.message);
+    if (isAtlassianConfigUsable(payload)) {
+      writeAtlassianClientConfig({ ...payload, connected: true, clientPersisted: true });
+      alert('✅ Credentials saved in this browser (offline). They will be used on the next sync.');
+    } else {
+      alert('⚠️ Failed to save Atlassian configuration: ' + err.message);
+    }
     renderAtlassianSuite(true);
   } finally {
     if (saveBtn) {
