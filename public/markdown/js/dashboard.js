@@ -1742,7 +1742,7 @@ async function renderGitDashboard() {
 
         <div style="margin-top: 1rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
           <button type="button" class="git-toggle-btn" onclick="typeof forceGitHubLiveSync==='function'&&forceGitHubLiveSync()" style="padding: 0.45rem 1rem;">↻ Refresh _acl-output from GitHub</button>
-          <span style="font-size: 0.78rem; color: #64748b;">Live sync runs automatically (~30s on Vercel). Server needs <code>GITHUB_TOKEN</code> in Vercel env.</span>
+          <span style="font-size: 0.78rem; color: #64748b;">Live sync runs automatically (~60s on Vercel). Server needs <code>GITHUB_TOKEN</code> in Vercel env.</span>
         </div>
 
         <!-- ATLASSIAN JIRA & CONFLUENCE INTEGRATION SUITE -->

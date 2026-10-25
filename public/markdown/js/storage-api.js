@@ -239,9 +239,13 @@ async function syncFromLiveDisk(quiet = false) {
       const data = await res.json();
       if (data && data.success === false) {
         if (!quiet) {
-          setSyncStatus(data.hint || data.error || 'GitHub sync failed', 'red');
+          const isRl = /rate limit/i.test(String(data.error || data.hint || ''));
+          setSyncStatus(data.hint || data.error || 'GitHub sync failed', isRl ? 'yellow' : 'red');
         }
         return false;
+      }
+      if (data && data.warning && !quiet) {
+        setSyncStatus(data.warning, 'yellow');
       }
       if (data && (data.frameworkVersion || data.version)) {
         updateDrawerFrameworkVersion(data.frameworkVersion || data.version);
@@ -445,6 +449,7 @@ async function saveCurrentFile() {
       content: file.content,
       status: file.status,
       autoPush: false,
+      githubSha: file.githubSha || undefined,
       githubOwner: ghOwner || undefined,
       githubRepo: ghRepo || undefined,
       githubBranch: ghBranch || undefined,
@@ -474,8 +479,18 @@ async function saveCurrentFile() {
       lastSaveTime = Date.now();
       setSyncStatus('Saved in Markdown Studio (save API not deployed yet)', 'yellow');
       resData = { success: true, gitPushed: false, mode: 'browser-session' };
-    } else if (resp.status >= 500 || resData.error) {
-      const errorMsg = resData.error || resData.message || resData.hint || `Server error (${resp.status})`;
+    } else if (
+      resp.status === 429 ||
+      resData.code === 'github_rate_limit' ||
+      /rate limit/i.test(String(resData.error || resData.detail || ''))
+    ) {
+      const errorMsg = resData.hint || resData.error || 'GitHub API rate limit exceeded. Wait a few minutes and save again.';
+      showToast(`GitHub save paused: ${errorMsg}`, 'error');
+      setSyncStatus(errorMsg, 'yellow');
+      return false;
+    } else if (resp.status >= 400 || resData.error) {
+      const errorMsg =
+        resData.hint || resData.error || resData.message || resData.detail || `Server error (${resp.status})`;
       showToast(`GitHub save failed: ${errorMsg}`, 'error');
       setSyncStatus(`GitHub save failed: ${errorMsg}`, 'red');
       return false;
@@ -606,6 +621,7 @@ function studioFilesToGitHubEntries(fileList) {
       filename: f.filename,
       content: f.content,
       status: f.status || parseStatusFromMarkdown(f.content),
+      githubSha: f.githubSha,
     });
   }
   return out;
@@ -683,6 +699,7 @@ async function commitMarkdownEntriesToGitHub(entries) {
         filename: entry.filename,
         content: entry.content,
         status: entry.status,
+        githubSha: entry.githubSha || undefined,
         githubOwner: resolvedOwner || undefined,
         githubRepo: resolvedRepo || undefined,
         githubBranch: branch,

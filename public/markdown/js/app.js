@@ -97,13 +97,16 @@ async function init() {
 
   // Universal live auto-sync: automatically syncs when any agent (Claude Code, AGY, Gemini, Copilot, Cursor, etc.)
   // generates or updates markdown files in _acl-output/ without needing manual browser refresh
-  const liveSyncMs = /vercel\.app$/i.test(window.location.hostname) ? 30_000 : 4_000;
+  const liveSyncMs = /vercel\.app$/i.test(window.location.hostname) ? 60_000 : 4_000;
   setInterval(() => {
-    syncFromLiveDisk(true);
+    if (document.visibilityState === 'visible') syncFromLiveDisk(true);
   }, liveSyncMs);
 
   window.addEventListener('focus', () => {
     syncFromLiveDisk(true);
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') syncFromLiveDisk(true);
   });
 
   const syncIndicator = document.getElementById('syncStatus');

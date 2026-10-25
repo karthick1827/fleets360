@@ -3,13 +3,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { resolveGithubAccessToken } from '../tools/github-token.mjs';
+import { githubJsonHeaders, isGithubRateLimited, githubRateLimitUserMessage } from '../tools/github-api.mjs';
+import {
+  githubListCacheKey,
+  getFreshGithubListPayload,
+  getStaleGithubListPayload,
+  setGithubListCacheEntry,
+  GITHUB_LIST_CACHE_TTL_MS,
+} from '../tools/github-list-cache.mjs';
 
-/** Short-lived cache — reduces GitHub API calls (Vercel shared IP hits rate limits fast). */
-const githubListCache = new Map();
-const GITHUB_LIST_CACHE_TTL_MS = 45_000;
-
-function githubListCacheKey(owner, repo, branch, token) {
-  return `${owner}/${repo}@${branch}::${token ? 'auth' : 'anon'}`;
+function sessionFileKey(folderPath, filename) {
+  const fp = folderPath === 'root' || !folderPath ? '' : String(folderPath).replace(/^\/+/, '');
+  return fp ? `${fp}/${filename}` : filename;
 }
 
 async function mapPool(items, limit, fn) {
@@ -259,41 +264,43 @@ async function universalHandler(arg1, arg2) {
         }
 
         const cacheKey = githubListCacheKey(owner, repo, branch, token);
-        const cached = githubListCache.get(cacheKey);
-        if (cached && Date.now() - cached.at < GITHUB_LIST_CACHE_TTL_MS) {
-          return reply(200, cached.payload);
+        const fresh = getFreshGithubListPayload(cacheKey, GITHUB_LIST_CACHE_TTL_MS);
+        if (fresh) {
+          return reply(200, { ...fresh, fromCache: true });
         }
 
-        const headers = {
-          Accept: 'application/vnd.github.v3+json',
-          'User-Agent': 'ACL-ADLC-Markdown-Studio',
-        };
-        if (token) {
-          headers.Authorization =
-            token.startsWith('Bearer ') || token.startsWith('token ')
-              ? token
-              : token.startsWith('ghp_') || token.startsWith('github_pat_')
-                ? `token ${token}`
-                : `Bearer ${token}`;
-        }
+        const headers = githubJsonHeaders(token);
+        const stalePayload = getStaleGithubListPayload(cacheKey);
 
         const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`;
         const treeRes = await fetch(treeUrl, { headers });
 
         if (!treeRes.ok) {
           const errBody = await treeRes.text().catch(() => '');
+          if (isGithubRateLimited(treeRes.status, errBody) && stalePayload) {
+            return reply(200, {
+              ...stalePayload,
+              fromCache: true,
+              stale: true,
+              warning: githubRateLimitUserMessage().hint,
+            });
+          }
           let hint = token
             ? 'Check GITHUB_TOKEN has repo or contents:read scope for this repository.'
             : 'Set GITHUB_TOKEN in Vercel environment variables.';
-          if (/rate limit/i.test(errBody)) {
-            hint = 'GitHub API rate limit exceeded. Wait a few minutes or use a GITHUB_TOKEN with higher quota.';
+          if (isGithubRateLimited(treeRes.status, errBody)) {
+            const rl = githubRateLimitUserMessage();
+            hint = rl.hint;
           }
           if (isServerless) {
-            return reply(treeRes.status === 404 ? 404 : 403, {
+            const statusCode = isGithubRateLimited(treeRes.status, errBody) ? 429 : treeRes.status === 404 ? 404 : 403;
+            return reply(statusCode, {
               success: false,
-              files: [],
+              files: stalePayload?.files || [],
               source: 'github-error',
-              error: `GitHub tree API failed (${treeRes.status})`,
+              error: isGithubRateLimited(treeRes.status, errBody)
+                ? githubRateLimitUserMessage().error
+                : `GitHub tree API failed (${treeRes.status})`,
               detail: errBody.slice(0, 280),
               hint,
               repo: `${owner}/${repo}`,
@@ -313,13 +320,31 @@ async function universalHandler(arg1, arg2) {
             return !isExcludedFile(path.basename(item.path));
           });
 
-          const files = await mapPool(aclMdItems, 6, async (item) => {
+          const prevByKey = new Map();
+          if (stalePayload?.files) {
+            for (const f of stalePayload.files) {
+              prevByKey.set(sessionFileKey(f.folderPath, f.filename), f);
+            }
+          }
+
+          const files = await mapPool(aclMdItems, 3, async (item) => {
             const relPath = item.path.replace(/^(_acl-output|_acl_output|acl-output)\/?/i, '');
+            const meta = parseMarkdownMetadata('', relPath);
+            const key = sessionFileKey(meta.folderPath, meta.filename);
+            const prev = prevByKey.get(key);
+            if (prev && item.sha && prev.githubSha === item.sha && prev.content) {
+              return { ...prev, githubSha: item.sha };
+            }
             const blobRes = await fetch(item.url, { headers });
-            if (!blobRes.ok) return null;
+            if (!blobRes.ok) {
+              if (prev?.content) return { ...prev, githubSha: item.sha || prev.githubSha };
+              return null;
+            }
             const blobJson = await blobRes.json();
             const content = Buffer.from(blobJson.content, 'base64').toString('utf8');
-            return parseMarkdownMetadata(content, relPath);
+            const parsed = parseMarkdownMetadata(content, relPath);
+            parsed.githubSha = item.sha || blobJson.sha;
+            return parsed;
           });
 
           const validFiles = files.filter(Boolean);
@@ -368,7 +393,7 @@ async function universalHandler(arg1, arg2) {
             cachedAt: new Date().toISOString(),
           };
 
-          githubListCache.set(cacheKey, { at: Date.now(), payload: responsePayload });
+          setGithubListCacheEntry(cacheKey, responsePayload);
           return reply(200, responsePayload);
         }
       } catch {

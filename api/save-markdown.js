@@ -3,6 +3,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { resolveGithubAccessToken } from '../tools/github-token.mjs';
+import { githubJsonHeaders, isGithubRateLimited, githubRateLimitUserMessage } from '../tools/github-api.mjs';
+import { invalidateGithubListCache } from '../tools/github-list-cache.mjs';
 
 async function universalHandler(arg1, arg2) {
   const corsHeaders = {
@@ -97,7 +99,8 @@ async function universalHandler(arg1, arg2) {
       }
     }
 
-    const { folderPath, filename, content, status } = payload || {};
+    const { folderPath, filename, content, status, githubSha, githubFileSha } = payload || {};
+    const knownFileSha = String(githubSha || githubFileSha || '').trim();
 
     if (!filename || typeof content !== 'string') {
       return reply(400, { success: false, error: 'Missing required fields: filename and content.' });
@@ -231,42 +234,38 @@ async function universalHandler(arg1, arg2) {
           hint: 'Link the Vercel project to GitHub or set GITHUB_OWNER and GITHUB_REPO in environment variables.',
         });
       }
-      const authHeader =
-        token.startsWith('Bearer ') || token.startsWith('token ')
-          ? token
-          : token.startsWith('ghp_') || token.startsWith('github_pat_')
-            ? `token ${token}`
-            : `Bearer ${token}`;
+      const headers = githubJsonHeaders(token);
 
-      const headers = {
-        Accept: 'application/vnd.github.v3+json',
-        Authorization: authHeader,
-        'User-Agent': 'ACL-ADLC-Markdown-Studio',
-      };
-
-      // Check for existing file SHA
-      let sha;
+      // Check for existing file SHA (skip GET when client already has blob sha from live sync)
+      let sha = knownFileSha || undefined;
       const getUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${repoFilePath}?ref=${encodeURIComponent(branch)}`;
-      try {
-        const getRes = await fetch(getUrl, { headers });
-        if (getRes.ok) {
-          const fileData = await getRes.json();
-          sha = fileData.sha;
-        } else if (getRes.status === 401) {
-          return reply(401, {
-            success: false,
-            error: 'GitHub token is invalid or expired. Update GITHUB_TOKEN in Vercel environment variables.',
-          });
-        } else if (getRes.status === 403) {
-          const errBody = await getRes.text();
-          return reply(403, {
-            success: false,
-            error: `GitHub token lacks permission: ${errBody}`,
-            hint: 'Token needs repo or contents:write permissions.',
-          });
+      if (!sha) {
+        try {
+          const getRes = await fetch(getUrl, { headers });
+          if (getRes.ok) {
+            const fileData = await getRes.json();
+            sha = fileData.sha;
+          } else if (getRes.status === 401) {
+            return reply(401, {
+              success: false,
+              error: 'GitHub token is invalid or expired. Update GITHUB_TOKEN in Vercel environment variables.',
+            });
+          } else if (getRes.status === 403 || getRes.status === 429) {
+            const errBody = await getRes.text();
+            if (isGithubRateLimited(getRes.status, errBody)) {
+              const rl = githubRateLimitUserMessage();
+              return reply(429, { success: false, ...rl, detail: errBody.slice(0, 200) });
+            }
+            return reply(403, {
+              success: false,
+              error: 'GitHub rejected the contents lookup for this file.',
+              detail: errBody.slice(0, 280),
+              hint: 'Token needs repo or contents:write permissions.',
+            });
+          }
+        } catch {
+          // Network or fetch error
         }
-      } catch {
-        // Network or fetch error
       }
 
       // Prepare commit message adhering to Conventional Commits
@@ -292,14 +291,20 @@ async function universalHandler(arg1, arg2) {
 
       if (!putRes.ok) {
         const errText = await putRes.text();
+        if (isGithubRateLimited(putRes.status, errText)) {
+          const rl = githubRateLimitUserMessage();
+          return reply(429, { success: false, ...rl, detail: errText.slice(0, 200) });
+        }
         return reply(putRes.status, {
           success: false,
-          error: `GitHub Commit failed (${putRes.status}): ${errText}`,
+          error: `GitHub commit failed (${putRes.status}).`,
+          detail: errText.slice(0, 280),
           hint: 'Verify GITHUB_TOKEN has write access (contents:write or repo scope) to ' + owner + '/' + repo,
         });
       }
 
       const commitResult = await putRes.json();
+      invalidateGithubListCache(owner, repo, branch);
 
       // Best effort write to local disk if writable
       try {
