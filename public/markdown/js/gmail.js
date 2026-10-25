@@ -562,6 +562,10 @@ async function executeGmailSend() {
   const file = getCurrentTargetFile(currentModalIsAgent);
   if (!file) return;
 
+  if (typeof window.flushActiveEditorToSession === 'function') {
+    window.flushActiveEditorToSession();
+  }
+
   const members = getTeamMembers(file);
   const selectedMembers = members.filter((m) => m.selected !== false);
 
@@ -615,6 +619,8 @@ async function executeGmailSend() {
         to: recipientEmails,
         subject: subject,
         body: body,
+        filename: cleanFilename,
+        content: file.content || '',
         senderUser: senderUser,
         senderPass: senderPass,
         saveToEnv: false,
@@ -625,6 +631,9 @@ async function executeGmailSend() {
     if (resp.ok && result && result.success) {
       sentViaApi = true;
       apiMessage = result.message || '';
+    } else if (resp.status === 404) {
+      apiMessage =
+        'Email API not deployed. Redeploy with api/send-email.js on Vercel, or run npm run dev locally.';
     } else {
       apiMessage = (result && (result.error || result.message)) || `HTTP error ${resp.status}`;
     }

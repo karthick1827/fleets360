@@ -213,6 +213,11 @@ async function syncFromLiveDisk(quiet = false) {
               if (f.folderPath === 'root' || !f.folderPath.includes('0-context')) {
                 seenMap.set(key, f);
               }
+            } else if (key.startsWith('spec-') || key.startsWith('story-')) {
+              const exFp = (existing.folderPath || '').toLowerCase();
+              const cFp = (f.folderPath || '').toLowerCase();
+              if (cFp.includes('implementation-artifacts')) seenMap.set(key, f);
+              else if (!exFp.includes('implementation-artifacts')) seenMap.set(key, f);
             } else if (existing.folderPath === 'root' || (!existing.folderPath.match(/[0-4]-/) && f.folderPath.match(/[0-4]-/))) {
               seenMap.set(key, f);
             }
@@ -524,6 +529,23 @@ function studioFilesToGitHubEntries(fileList) {
   return out;
 }
 
+async function ensureGitHubCloudDefaults() {
+  const owner = (localStorage.getItem('acl_github_owner') || '').trim();
+  const repo = (localStorage.getItem('acl_github_repo') || '').trim();
+  if (owner && repo) return;
+  try {
+    const res = await fetch('/api/git-details', { cache: 'no-store' });
+    if (!res.ok) return;
+    const data = await res.json();
+    const origin = data.remoteOrigin || '';
+    const m = origin.match(/github\.com[/:]([^/]+)\/([^/.]+)/i);
+    if (m) {
+      if (!owner) localStorage.setItem('acl_github_owner', m[1]);
+      if (!repo) localStorage.setItem('acl_github_repo', m[2].replace(/\.git$/i, ''));
+    }
+  } catch (e) {}
+}
+
 /**
  * Commit one or more markdown files to GitHub via /api/save-markdown (requires Cloud Sync token).
  */
@@ -548,6 +570,11 @@ async function commitMarkdownEntriesToGitHub(entries) {
     };
   }
 
+  await ensureGitHubCloudDefaults();
+  const resolvedOwner = (localStorage.getItem('acl_github_owner') || '').trim();
+  const resolvedRepo = (localStorage.getItem('acl_github_repo') || '').trim();
+  const resolvedBranch = (localStorage.getItem('acl_github_branch') || '').trim() || 'main';
+
   const pushed = [];
   const failed = [];
   const saveEndpoint = (window.__ACL_LIVE_ENDPOINT__ || '') + '/api/save-markdown';
@@ -565,9 +592,9 @@ async function commitMarkdownEntriesToGitHub(entries) {
         content: entry.content,
         status: entry.status,
         githubToken: cloudToken,
-        githubOwner: cloudOwner || undefined,
-        githubRepo: cloudRepo || undefined,
-        githubBranch: cloudBranch || undefined,
+        githubOwner: resolvedOwner || cloudOwner || undefined,
+        githubRepo: resolvedRepo || cloudRepo || undefined,
+        githubBranch: resolvedBranch || cloudBranch || undefined,
       };
       const resp = await fetch(saveEndpoint, {
         method: 'POST',
@@ -575,12 +602,16 @@ async function commitMarkdownEntriesToGitHub(entries) {
         body: JSON.stringify(bodyPayload),
       });
       const data = await resp.json().catch(() => ({}));
-      if (resp.ok && data.gitPushed) {
+      const committed =
+        resp.ok &&
+        data.success !== false &&
+        (data.gitPushed === true || data.mode === 'github' || Boolean(data.commitSha));
+      if (committed) {
         pushed.push({ filename: entry.filename, path: data.path, commitSha: data.commitSha });
       } else {
         failed.push({
           filename: entry.filename,
-          error: data.error || data.message || `HTTP ${resp.status}`,
+          error: data.error || data.message || data.warning || `HTTP ${resp.status}`,
         });
       }
     } catch (err) {
@@ -598,8 +629,8 @@ async function commitMarkdownEntriesToGitHub(entries) {
     skipped: false,
     pushed,
     failed,
-    repo: cloudOwner && cloudRepo ? `${cloudOwner}/${cloudRepo}` : 'linked repository',
-    branch: cloudBranch,
+    repo: resolvedOwner && resolvedRepo ? `${resolvedOwner}/${resolvedRepo}` : 'linked repository',
+    branch: resolvedBranch,
   };
 }
 

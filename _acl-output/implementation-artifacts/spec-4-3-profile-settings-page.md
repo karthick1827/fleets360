@@ -7,6 +7,8 @@ jira_key: EW-114
 title: Profile settings page (Story 4.3)
 type: feature
 created: 2026-09-16
+story_id: "4.3"
+epic_id: "4"
 story_key: 4-3-profile-settings-page
 baseline_commit: NO_VCS
 context:

@@ -138,7 +138,7 @@ async function universalHandler(arg1, arg2) {
             /^story-\d+/i.test(lowerName) ||
             /^spec-/i.test(lowerName)
           ) {
-            cleanFolder = '4-implementation';
+            cleanFolder = 'implementation-artifacts';
           } else {
             cleanFolder = '';
           }

@@ -85,6 +85,14 @@ export function parseStoryFromContent(raw, filename, filePath, results) {
     if (titleM) title = titleM[1].trim();
     const idM = fm.match(/story_id:\s*["']?([^"'\r\n]+)["']?/i);
     if (idM) storyId = idM[1].trim();
+    if (!storyId) {
+      const skM = fm.match(/story_key:\s*["']?([^"'\r\n]+)["']?/i);
+      if (skM) {
+        const sk = skM[1].trim();
+        const sm = sk.match(/(\d+)[-_](\d+)/);
+        if (sm) storyId = `${sm[1]}.${sm[2]}`;
+      }
+    }
     const epicM = fm.match(/epic_id:\s*["']?([^"'\r\n]+)["']?/i);
     if (epicM) epicId = epicM[1].trim();
     const statusM = fm.match(/status:\s*["']?([^"'\r\n]+)["']?/i);

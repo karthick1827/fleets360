@@ -279,6 +279,11 @@ async function universalHandler(arg1, arg2) {
                 if (f.folderPath === 'root' || !f.folderPath.includes('0-context')) {
                   seenMap.set(key, f);
                 }
+              } else if (key.startsWith('spec-') || key.startsWith('story-')) {
+                const exFp = (existing.folderPath || '').toLowerCase();
+                const cFp = (f.folderPath || '').toLowerCase();
+                if (cFp.includes('implementation-artifacts')) seenMap.set(key, f);
+                else if (!exFp.includes('implementation-artifacts')) seenMap.set(key, f);
               } else if (existing.folderPath === 'root' || (!existing.folderPath.match(/[0-4]-/) && f.folderPath.match(/[0-4]-/))) {
                 seenMap.set(key, f);
               }
