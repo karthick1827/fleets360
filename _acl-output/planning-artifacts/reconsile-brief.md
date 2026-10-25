@@ -1,7 +1,7 @@
 ---
 status: In Review
 reviewed_by: Manager (via Markdown Studio)
-review_timestamp: 2026-10-25T07:41:55.144Z
+review_timestamp: 2026-10-25T07:42:29.451Z
 gate_signature: ACL-STUDIO-APPROVAL-IN-REVIEW
 title: "Reconsile Brief"
 confluence_page_id: 7176193
