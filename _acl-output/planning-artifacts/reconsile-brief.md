@@ -1,8 +1,8 @@
 ---
-status: Approved
+status: In Review
 reviewed_by: Manager (via Markdown Studio)
-review_timestamp: 2026-10-25T06:42:42.793Z
-gate_signature: ACL-STUDIO-APPROVAL-APPROVED
+review_timestamp: 2026-10-25T06:51:10.495Z
+gate_signature: ACL-STUDIO-APPROVAL-IN-REVIEW
 title: "Reconsile Brief"
 confluence_page_id: 7176193
 created: 2026-10-25
@@ -24,7 +24,7 @@ created: 2026-10-25
 
 -
 
-[X] Page shows email from session
+[X] Page shows email from session time
 
 -
 
