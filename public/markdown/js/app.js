@@ -56,6 +56,13 @@ async function init() {
   const hydrated =
     typeof window.hydrateFilesFromLocalStorage === 'function' && window.hydrateFilesFromLocalStorage();
 
+  if (typeof window.dedupeSessionFilesByFilename === 'function' && Array.isArray(files) && files.length > 0) {
+    files = window.dedupeSessionFilesByFilename(files);
+    try {
+      localStorage.setItem('acl_adlc_project_markdown_files', JSON.stringify(files));
+    } catch (e) {}
+  }
+
   const synced = hydrated && typeof window.isSessionSyncGuarded === 'function' && window.isSessionSyncGuarded()
     ? false
     : await syncFromLiveDisk(true);
@@ -104,6 +111,10 @@ async function init() {
   const hashView = (window.location.hash || '').slice(1);
   const deepLinkViews = ['working-tree', 'dashboard-scrum', 'dashboard-developer', 'studio'];
   switchAppView(deepLinkViews.includes(hashView) ? hashView : 'dashboard-summarized');
+
+  if (typeof window.reconcileSessionWithRemoteSpecs === 'function') {
+    window.reconcileSessionWithRemoteSpecs().catch(() => {});
+  }
 
   // Universal live auto-sync: automatically syncs when any agent (Claude Code, AGY, Gemini, Copilot, Cursor, etc.)
   // generates or updates markdown files in _acl-output/ without needing manual browser refresh

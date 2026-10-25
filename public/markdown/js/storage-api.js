@@ -1,5 +1,47 @@
+function normalizeStudioFolderPath(folderPath) {
+  const fp = String(folderPath || 'root')
+    .replace(/\\/g, '/')
+    .replace(/^(_acl-output|_acl_output|acl-output)\/?/i, '')
+    .replace(/^\/+/, '')
+    .replace(/\/+$/, '');
+  if (!fp || fp === 'root' || fp === '.') return 'root';
+  if (fp === '4-implementation' || fp.endsWith('/4-implementation')) {
+    return fp.replace(/\/?4-implementation\/?$/i, 'implementation-artifacts') || 'implementation-artifacts';
+  }
+  return fp;
+}
+
+function specFileScore(f) {
+  const fn = (f.filename || '').toLowerCase();
+  const fp = normalizeStudioFolderPath(f.folderPath).toLowerCase();
+  let score = (f.content || '').length;
+  if (fp.includes('implementation-artifacts')) score += 1_000_000;
+  if (fp.includes('4-implementation')) score -= 500_000;
+  if (fn.startsWith('spec-') || fn.startsWith('story-')) score += 100;
+  return score;
+}
+
+/** Collapse duplicate spec/story filenames (legacy 4-implementation vs implementation-artifacts). */
+function dedupeSessionFilesByFilename(fileList) {
+  const byName = new Map();
+  for (const f of fileList || []) {
+    const key = (f.filename || '').toLowerCase();
+    if (!key) continue;
+    const normalized = {
+      ...f,
+      folderPath: normalizeStudioFolderPath(f.folderPath),
+    };
+    const prev = byName.get(key);
+    if (!prev || specFileScore(normalized) > specFileScore(prev)) {
+      byName.set(key, normalized);
+    }
+  }
+  return Array.from(byName.values());
+}
+
 function fileStorageKey(f) {
-  return `${f.folderPath || 'root'}::${(f.filename || '').toLowerCase()}`;
+  const folder = normalizeStudioFolderPath(f.folderPath);
+  return `${folder}::${(f.filename || '').toLowerCase()}`;
 }
 
 function parseStatusFromMarkdown(content) {
@@ -49,12 +91,18 @@ function mergeRemoteWithLocalSession(localFiles, remoteFiles) {
       continue;
     }
     const sessionOwned = Boolean(lf.sessionRevision || lf.sessionFromAtlassian);
+    const localLen = (lf.content || '').length;
+    const remoteLen = (rf.content || '').length;
+    const localEffectivelyEmpty = localLen < 80 && remoteLen > localLen + 40;
     if (guardActive || sessionOwned) {
       merged.push({
         ...rf,
         ...lf,
-        content: lf.content,
-        status: lf.status || parseStatusFromMarkdown(lf.content),
+        folderPath: normalizeStudioFolderPath(lf.folderPath || rf.folderPath),
+        content: localEffectivelyEmpty ? rf.content : lf.content,
+        status: localEffectivelyEmpty
+          ? parseStatusFromMarkdown(rf.content)
+          : lf.status || parseStatusFromMarkdown(lf.content),
         updatedAt: lf.updatedAt || rf.updatedAt,
         sessionRevision: lf.sessionRevision,
         sessionFromAtlassian: lf.sessionFromAtlassian,
@@ -121,15 +169,18 @@ function hydrateFilesFromLocalStorage() {
     if (!raw) return false;
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed) || parsed.length === 0) return false;
-    files = parsed
-      .filter((f) => !isChildFile(f.filename, f.folderPath))
-      .map((f) => ({
-        ...f,
-        status:
-          f.status === 'Accepted' || f.status === 'approved' || f.status === 'Approved'
-            ? 'Approved'
-            : f.status || 'In Review',
-      }));
+    files = dedupeSessionFilesByFilename(
+      parsed
+        .filter((f) => !isChildFile(f.filename, f.folderPath))
+        .map((f) => ({
+          ...f,
+          folderPath: normalizeStudioFolderPath(f.folderPath),
+          status:
+            f.status === 'Accepted' || f.status === 'approved' || f.status === 'Approved'
+              ? 'Approved'
+              : f.status || 'In Review',
+        })),
+    );
     const savedActive = localStorage.getItem('acl_active_file_id');
     if (savedActive && files.some((f) => f.id === savedActive)) {
       activeFileId = savedActive;
@@ -223,7 +274,7 @@ async function syncFromLiveDisk(quiet = false) {
             }
           }
         }
-        filteredFiles = Array.from(seenMap.values());
+        filteredFiles = dedupeSessionFilesByFilename(Array.from(seenMap.values()));
 
         if (filteredFiles.length === 0) {
           files = [];
@@ -327,6 +378,8 @@ async function saveCurrentFile() {
   const file = getActiveFile();
   if (!file) return;
 
+  file.folderPath = normalizeStudioFolderPath(file.folderPath);
+
   const textarea = document.getElementById('markdownTextarea');
   const status = document.getElementById('statusSelect').value;
   const nowIso = new Date().toISOString();
@@ -345,6 +398,7 @@ async function saveCurrentFile() {
   persistFilesToBrowserSession();
 
   const cloudToken = (localStorage.getItem('acl_github_token') || '').trim();
+  await ensureGitHubCloudDefaults();
   const cloudOwner = (localStorage.getItem('acl_github_owner') || '').trim();
   const cloudRepo = (localStorage.getItem('acl_github_repo') || '').trim();
   const cloudBranch = (localStorage.getItem('acl_github_branch') || '').trim();
@@ -380,7 +434,9 @@ async function saveCurrentFile() {
 
     if (resp.ok && resData.success !== false) {
       lastSaveTime = Date.now();
-      if (resData.gitPushed) {
+      const pushed =
+        resData.gitPushed === true || resData.mode === 'github' || Boolean(resData.commitSha);
+      if (pushed) {
         clearSessionSyncGuard();
         setSyncStatus('Saved to IDE & pushed to GitHub', 'green');
       } else if (cloudToken && resData.mode === 'github') {
@@ -504,7 +560,7 @@ function clientFilesToGitHubEntries(clientFiles) {
     const rel = normPath(item.relativePath);
     const parts = rel.split('/').filter(Boolean);
     const filename = parts.pop() || 'document.md';
-    const folderPath = parts.length ? parts.join('/') : 'root';
+    const folderPath = normalizeStudioFolderPath(parts.length ? parts.join('/') : 'root');
     out.push({
       folderPath,
       filename,
@@ -520,7 +576,7 @@ function studioFilesToGitHubEntries(fileList) {
   for (const f of fileList || []) {
     if (!f || !f.filename || typeof f.content !== 'string') continue;
     out.push({
-      folderPath: f.folderPath || 'root',
+      folderPath: normalizeStudioFolderPath(f.folderPath || 'root'),
       filename: f.filename,
       content: f.content,
       status: f.status || parseStatusFromMarkdown(f.content),
@@ -634,6 +690,76 @@ async function commitMarkdownEntriesToGitHub(entries) {
   };
 }
 
+async function reconcileSessionWithRemoteSpecs() {
+  const cloudToken = (localStorage.getItem('acl_github_token') || '').trim();
+  if (!cloudToken) return false;
+  await ensureGitHubCloudDefaults();
+  const headers = {
+    'Cache-Control': 'no-store',
+    Authorization: 'Bearer ' + cloudToken,
+    'X-GitHub-Token': cloudToken,
+  };
+  const owner = (localStorage.getItem('acl_github_owner') || '').trim();
+  const repo = (localStorage.getItem('acl_github_repo') || '').trim();
+  const branch = (localStorage.getItem('acl_github_branch') || '').trim();
+  let queryUrl = '/api/list-markdown-files?t=' + Date.now();
+  if (owner) queryUrl += '&owner=' + encodeURIComponent(owner);
+  if (repo) queryUrl += '&repo=' + encodeURIComponent(repo);
+  if (branch) queryUrl += '&branch=' + encodeURIComponent(branch);
+  try {
+    const res = await fetch((window.__ACL_LIVE_ENDPOINT__ || '') + queryUrl, { headers, cache: 'no-store' });
+    if (!res.ok) return false;
+    const data = await res.json();
+    if (!data || !Array.isArray(data.files)) return false;
+    const remoteSpecs = dedupeSessionFilesByFilename(
+      data.files.filter((f) => {
+        const fn = (f.filename || '').toLowerCase();
+        return fn.startsWith('spec-') || fn.startsWith('story-');
+      }),
+    );
+    if (remoteSpecs.length === 0) return false;
+    let changed = false;
+    for (const rf of remoteSpecs) {
+      const folderPath = normalizeStudioFolderPath(rf.folderPath);
+      const idx = files.findIndex(
+        (f) => (f.filename || '').toLowerCase() === (rf.filename || '').toLowerCase(),
+      );
+      const remoteLen = (rf.content || '').length;
+      if (idx < 0) {
+        files.push({
+          ...rf,
+          folderPath,
+          status: parseStatusFromMarkdown(rf.content),
+        });
+        changed = true;
+        continue;
+      }
+      const localLen = (files[idx].content || '').length;
+      if (remoteLen > localLen + 40) {
+        files[idx].content = rf.content;
+        files[idx].folderPath = folderPath;
+        files[idx].status = parseStatusFromMarkdown(rf.content);
+        changed = true;
+      }
+    }
+    if (changed) {
+      files = dedupeSessionFilesByFilename(files);
+      persistFilesToBrowserSession();
+      renderFileTree();
+      if (activeAppView === 'dashboard' || activeAppView === 'dashboard-summarized') {
+        renderDeliveryDashboard();
+      } else if (activeAppView === 'dashboard-scrum') {
+        renderScrumMasterDashboard();
+      } else if (activeAppView === 'dashboard-developer') {
+        renderDeveloperDashboard();
+      }
+    }
+    return changed;
+  } catch (e) {
+    return false;
+  }
+}
+
 async function onStatusChange(newStatus) {
   const file = getActiveFile();
   if (!file) return;
@@ -679,6 +805,9 @@ if (typeof window !== 'undefined') {
   window.clientFilesToGitHubEntries = clientFilesToGitHubEntries;
   window.studioFilesToGitHubEntries = studioFilesToGitHubEntries;
   window.commitMarkdownEntriesToGitHub = commitMarkdownEntriesToGitHub;
+  window.reconcileSessionWithRemoteSpecs = reconcileSessionWithRemoteSpecs;
+  window.dedupeSessionFilesByFilename = dedupeSessionFilesByFilename;
+  window.normalizeStudioFolderPath = normalizeStudioFolderPath;
   window.onStatusChange = onStatusChange;
   window.syncFromLiveDisk = syncFromLiveDisk;
   window.refreshTree = async function (quiet = false) {

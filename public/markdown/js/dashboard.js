@@ -1964,7 +1964,12 @@ function applyAtlassianClientFiles(clientFiles) {
     const rel = normPath(item.relativePath);
     const parts = rel.split('/').filter(Boolean);
     const filename = parts.pop() || 'document.md';
-    const folderPath = parts.length ? parts.join('/') : 'root';
+    const folderPath =
+      typeof window.normalizeStudioFolderPath === 'function'
+        ? window.normalizeStudioFolderPath(parts.length ? parts.join('/') : 'root')
+        : parts.length
+          ? parts.join('/')
+          : 'root';
     const id = rel.replace(/[^a-zA-Z0-9_-]/g, '_');
 
     const pulledStatus =
@@ -1998,6 +2003,9 @@ function applyAtlassianClientFiles(clientFiles) {
   }
 
   if (changed) {
+    if (typeof window.dedupeSessionFilesByFilename === 'function') {
+      files = window.dedupeSessionFilesByFilename(files);
+    }
     try {
       localStorage.setItem('acl_adlc_project_markdown_files', JSON.stringify(files));
     } catch (e) {}
@@ -2008,6 +2016,18 @@ function applyAtlassianClientFiles(clientFiles) {
     if (typeof evaluateProceedButton === 'function') evaluateProceedButton();
   }
   return changed;
+}
+
+function appendGitHubSyncFromServer(bannerMsg, result) {
+  const gh = result && result.githubSync;
+  if (!gh || gh.skipped) return bannerMsg;
+  if (gh.success) {
+    return bannerMsg + ` ✅ GitHub (server): committed ${gh.pushed.length} file(s) to ${gh.repo}@${gh.branch}.`;
+  }
+  if (gh.failed && gh.failed.length) {
+    return bannerMsg + ` ⚠️ GitHub (server): ${gh.failed[0].error || 'commit failed'}`;
+  }
+  return bannerMsg;
 }
 
 function atlassianResultOk(res, result) {
@@ -2442,6 +2462,9 @@ window.executeJiraPull = async function () {
       if (result.clientFiles && result.clientFiles.length > 0) {
         applyAtlassianClientFiles(result.clientFiles);
       }
+      if (typeof window.reconcileSessionWithRemoteSpecs === 'function') {
+        await window.reconcileSessionWithRemoteSpecs();
+      }
       recordAtlassianSyncResult(result, 'JIRA Stories Pull (Fetch)');
       let bannerMsg = '';
       if (result.updatedCount === 0 && result.createdCount === 0) {
@@ -2463,8 +2486,12 @@ window.executeJiraPull = async function () {
       }
       if (result.clientFiles && result.clientFiles.length > 0) {
         bannerMsg += ' Updated ' + result.clientFiles.length + ' file(s) in this browser session.';
-        bannerMsg = await appendGitHubCommitMessageForClientFiles(bannerMsg, result.clientFiles);
+        const jiraChanged = (result.updatedCount || 0) > 0 || (result.createdCount || 0) > 0;
+        if (jiraChanged) {
+          bannerMsg = await appendGitHubCommitMessageForClientFiles(bannerMsg, result.clientFiles);
+        }
       }
+      bannerMsg = appendGitHubSyncFromServer(bannerMsg, result);
       displaySyncResultBanner(bannerMsg, 'jira');
       renderAtlassianSuite(true);
       if (result.clientFiles && result.clientFiles.length > 0 && typeof switchAppView === 'function') {

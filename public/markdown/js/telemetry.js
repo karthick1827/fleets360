@@ -82,7 +82,7 @@ function parseEpicsAndStoriesFromMarkdown(markdownText, allFiles = []) {
         if (Array.isArray(allFiles) && allFiles.length > 0) {
           const numSlug = sNum ? sNum.replace(/\./g, '-') : '';
           const dotSlug = sNum || '';
-          matchFile = allFiles.find((f) => {
+          const matches = allFiles.filter((f) => {
             const fn = (f.filename || '').toLowerCase();
             const fp = (f.fullPath || f.folderPath || f.path || '').toLowerCase();
             if (!numSlug) return false;
@@ -96,6 +96,9 @@ function parseEpicsAndStoriesFromMarkdown(markdownText, allFiles = []) {
               fn.includes(`spec-${dotSlug}`)
             );
           });
+          if (matches.length > 0) {
+            matchFile = matches.sort((a, b) => storySpecMatchScore(b, numSlug) - storySpecMatchScore(a, numSlug))[0];
+          }
 
           if (matchFile) {
             const raw = (matchFile.status || '').trim().toLowerCase();
@@ -276,11 +279,22 @@ function formatAcLine(text) {
     );
 }
 
+function storySpecMatchScore(f, numSlug) {
+  const fn = (f.filename || '').toLowerCase();
+  const fp = (f.fullPath || f.folderPath || f.path || '').toLowerCase();
+  let score = (f.content || '').length;
+  if (fp.includes('implementation-artifacts')) score += 1_000_000;
+  if (fp.includes('4-implementation')) score -= 500_000;
+  if (fn.includes(`spec-${numSlug}`) || fn.includes(`story-${numSlug}`)) score += 10_000;
+  return score;
+}
+
 function parseAcceptanceCriteriaFromSpec(markdownText) {
   if (!markdownText) return [];
   const lines = markdownText.split(/\r?\n/);
   const items = [];
   let inAcSection = false;
+  let inTasksSection = false;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -288,29 +302,51 @@ function parseAcceptanceCriteriaFromSpec(markdownText) {
 
     if (trimmed.match(/^##+\s+Acceptance\s+Criteria/i)) {
       inAcSection = true;
+      inTasksSection = false;
+      continue;
+    }
+    if (trimmed.match(/^##+\s+Tasks\s*&\s*Acceptance/i)) {
+      inTasksSection = true;
+      inAcSection = false;
+      continue;
+    }
+    if (trimmed.match(/^\*\*Acceptance\s+Criteria:?\*\*/i)) {
+      inAcSection = true;
       continue;
     }
 
-    if (inAcSection && trimmed.match(/^##+\s+[^\s]/)) {
-      break;
+    if ((inAcSection || inTasksSection) && trimmed.match(/^##+\s+[^\s]/)) {
+      if (!trimmed.match(/Acceptance/i)) break;
     }
 
-    if (inAcSection) {
+    if (inAcSection || inTasksSection) {
       const checkMatch = trimmed.match(/^[-*]\s*\[([ xX])\]\s*(.*)$/);
       if (checkMatch) {
-        items.push({
-          isCompleted: checkMatch[1].toLowerCase() === 'x',
-          text: checkMatch[2].trim(),
-          raw: trimmed,
-        });
-      } else {
-        const bulletMatch = trimmed.match(/^[-*]\s+(.*)$/);
-        if (bulletMatch && bulletMatch[1].trim()) {
+        const text = checkMatch[2].trim();
+        if (/^given\b/i.test(text) || inAcSection || inTasksSection) {
           items.push({
-            isCompleted: false,
-            text: bulletMatch[1].trim(),
+            isCompleted: checkMatch[1].toLowerCase() === 'x',
+            text,
             raw: trimmed,
           });
+        }
+      } else {
+        const givenMatch = trimmed.match(/^[-*]\s+(Given\b.+)$/i);
+        if (givenMatch) {
+          items.push({
+            isCompleted: false,
+            text: givenMatch[1].trim(),
+            raw: trimmed,
+          });
+        } else {
+          const bulletMatch = trimmed.match(/^[-*]\s+(.*)$/);
+          if (bulletMatch && bulletMatch[1].trim() && inAcSection) {
+            items.push({
+              isCompleted: false,
+              text: bulletMatch[1].trim(),
+              raw: trimmed,
+            });
+          }
         }
       }
     }

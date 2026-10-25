@@ -6,7 +6,11 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { githubContextFromRequest, loadAclOutputMarkdownFromGitHub } from './acl-output-github.mjs';
+import {
+  commitClientFilesToGitHub,
+  githubContextFromRequest,
+  loadAclOutputMarkdownFromGitHub,
+} from './acl-output-github.mjs';
 import {
   discoverDeliverablesFromWorkspace,
   discoverStoriesAndEpicsFromWorkspace,
@@ -1410,6 +1414,11 @@ export async function pullFromJira(projectRoot, customConfig = {}, req = null) {
           file: path.basename(existing.filePath),
           url: `${domain}/browse/${issue.key}`,
         });
+
+        // Serverless / browser workspace: refresh session with canonical file body (fixes empty Studio copies).
+        if ((useWorkspace || isServerlessRuntime()) && existing.rawContent) {
+          queueClientMarkdown(pullResults, existing.filePath, existing.rawContent);
+        }
       }
     } else {
       // ─────────────────────────────────────────────────────────────────
@@ -1473,6 +1482,11 @@ export async function pullFromJira(projectRoot, customConfig = {}, req = null) {
     projectKey,
     summary: `Pulled ${pullResults.items.length} stories from JIRA (${pullResults.updatedCount} changed set to 'In Review', ${pullResults.createdCount} created, ${pullResults.unchangedCount} unchanged preserved).`,
   });
+
+  const ghCtx = githubContextFromRequest(req, customConfig);
+  if (ghCtx.token && pullResults.clientFiles.length > 0 && (pullResults.updatedCount > 0 || pullResults.createdCount > 0)) {
+    pullResults.githubSync = await commitClientFilesToGitHub(pullResults.clientFiles, ghCtx);
+  }
 
   return { success: true, ...pullResults, mapping };
 }

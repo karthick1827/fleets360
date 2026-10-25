@@ -142,3 +142,155 @@ export function githubContextFromRequest(req, payload = {}) {
 
   return { owner, repo, branch, token };
 }
+
+/** Canonical implementation folder (repo uses implementation-artifacts, not 4-implementation). */
+export function normalizeAclFolderSegment(folderPath) {
+  let folder = String(folderPath || '')
+    .replace(/\\/g, '/')
+    .replace(/^(_acl-output|_acl_output|acl-output)\/?/i, '')
+    .replace(/^\/+/, '')
+    .replace(/\/+$/, '');
+  if (!folder || folder === 'root' || folder === '.') return folder;
+  if (folder === '4-implementation' || folder.endsWith('/4-implementation')) {
+    return folder.replace(/\/?4-implementation\/?$/i, 'implementation-artifacts').replace(/^\/+/, '') || 'implementation-artifacts';
+  }
+  return folder;
+}
+
+export function repoPathFromClientRelative(relativePath, filename, folderPath, content) {
+  let rel = String(relativePath || '').replace(/\\/g, '/');
+  if (rel.startsWith('_acl-output/')) {
+    return rel;
+  }
+  const name = (filename || 'document.md').replace(/^\/+/, '');
+  let folder = normalizeAclFolderSegment(folderPath);
+  if (!folder || folder === 'root' || folder === '.') {
+    const lower = name.toLowerCase();
+    if (lower.startsWith('spec-') || lower.startsWith('story-')) {
+      folder = 'implementation-artifacts';
+    } else {
+      folder = '';
+    }
+  }
+  return folder ? `_acl-output/${folder}/${name}` : `_acl-output/${name}`;
+}
+
+/**
+ * Commit markdown to GitHub Contents API (server-side, used by Atlassian pull/push).
+ */
+export async function commitMarkdownToGitHub({ owner, repo, branch, token, repoFilePath, content, status, message }) {
+  const o = String(owner || '').trim();
+  const r = String(repo || '').trim();
+  const b = String(branch || 'main').trim();
+  const tok = String(token || '').trim();
+  const path = String(repoFilePath || '').replace(/\\/g, '/');
+  if (!o || !r || !tok || !path || typeof content !== 'string') {
+    return { success: false, error: 'Missing GitHub commit parameters.' };
+  }
+
+  const authHeader =
+    tok.startsWith('Bearer ') || tok.startsWith('token ')
+      ? tok
+      : tok.startsWith('ghp_') || tok.startsWith('github_pat_')
+        ? `token ${tok}`
+        : `Bearer ${tok}`;
+
+  const headers = {
+    Accept: 'application/vnd.github.v3+json',
+    Authorization: authHeader,
+    'User-Agent': 'fleets360-atlassian-sync',
+  };
+
+  let sha;
+  const getUrl = `https://api.github.com/repos/${encodeURIComponent(o)}/${encodeURIComponent(r)}/contents/${path}?ref=${encodeURIComponent(b)}`;
+  const getRes = await fetch(getUrl, { headers });
+  if (getRes.ok) {
+    const fileData = await getRes.json();
+    sha = fileData.sha;
+  } else if (getRes.status === 401) {
+    return { success: false, error: 'GitHub token is invalid or expired.' };
+  } else if (getRes.status === 403) {
+    return { success: false, error: 'GitHub token lacks contents:write permission.' };
+  }
+
+  const cleanStatus = (status || '').trim();
+  const commitMsg =
+    message ||
+    (cleanStatus
+      ? `docs(review): update ${path.split('/').pop()} status to [${cleanStatus}] via Markdown Studio`
+      : `docs: sync ${path.split('/').pop()} via Markdown Studio`);
+
+  const putUrl = `https://api.github.com/repos/${encodeURIComponent(o)}/${encodeURIComponent(r)}/contents/${path}`;
+  const putRes = await fetch(putUrl, {
+    method: 'PUT',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message: commitMsg,
+      content: Buffer.from(content, 'utf8').toString('base64'),
+      branch: b,
+      ...(sha ? { sha } : {}),
+    }),
+  });
+
+  if (!putRes.ok) {
+    const errText = await putRes.text();
+    return { success: false, error: `GitHub commit failed (${putRes.status}): ${errText}` };
+  }
+
+  const commitResult = await putRes.json();
+  return {
+    success: true,
+    path,
+    commitSha: commitResult.commit?.sha || commitResult.sha,
+  };
+}
+
+export async function commitClientFilesToGitHub(clientFiles, ghContext) {
+  const gh = ghContext || {};
+  const token = String(gh.token || '').trim();
+  if (!token) {
+    return { success: false, skipped: true, reason: 'No GitHub token.', pushed: [], failed: [] };
+  }
+  const owner = String(gh.owner || '').trim();
+  const repo = String(gh.repo || '').trim();
+  const branch = String(gh.branch || 'main').trim();
+  if (!owner || !repo) {
+    return { success: false, skipped: true, reason: 'GitHub owner/repo not configured.', pushed: [], failed: [] };
+  }
+
+  const pushed = [];
+  const failed = [];
+  for (const item of clientFiles || []) {
+    if (!item || typeof item.content !== 'string') continue;
+    const repoPath = repoPathFromClientRelative(item.relativePath, item.filename, item.folderPath, item.content);
+    const statusMatch = item.content.match(/^---[\s\S]*?\nstatus:\s*([^\r\n]+)/im);
+    const status = statusMatch ? statusMatch[1].trim() : '';
+    try {
+      const result = await commitMarkdownToGitHub({
+        owner,
+        repo,
+        branch,
+        token,
+        repoFilePath: repoPath,
+        content: item.content,
+        status,
+      });
+      if (result.success) {
+        pushed.push({ path: repoPath, commitSha: result.commitSha });
+      } else {
+        failed.push({ path: repoPath, error: result.error || 'Commit failed' });
+      }
+    } catch (err) {
+      failed.push({ path: repoPath, error: err.message || String(err) });
+    }
+  }
+
+  return {
+    success: failed.length === 0 && pushed.length > 0,
+    skipped: false,
+    pushed,
+    failed,
+    repo: `${owner}/${repo}`,
+    branch,
+  };
+}

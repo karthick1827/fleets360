@@ -106,6 +106,9 @@ async function universalHandler(arg1, arg2) {
     let cleanFolder = (folderPath || '').replaceAll('\\', '/').trim();
     cleanFolder = cleanFolder.replace(/^(_acl-output|_acl_output|acl-output)\/?/i, '');
     cleanFolder = cleanFolder.replace(/^\/+/, '').replace(/\/+$/, '');
+    if (cleanFolder === '4-implementation' || cleanFolder.endsWith('/4-implementation')) {
+      cleanFolder = cleanFolder.replace(/\/?4-implementation\/?$/i, 'implementation-artifacts') || 'implementation-artifacts';
+    }
     const cleanFilename = filename.replace(/^\/+/, '').trim();
     const lowerName = cleanFilename.toLowerCase();
 
