@@ -383,14 +383,17 @@ async function syncFromLiveDisk(quiet = false) {
       }
     }
     if (!res.ok) {
-      let errHint = 'GitHub list sync failed - check Cloud Sync in User Control.';
+      let errHint = 'GitHub list sync failed - open menu ? User Control Centre ? GitHub Cloud Sync.';
       try {
         const errData = await res.json();
         if (errData && (errData.hint || errData.error)) {
           errHint = errData.hint || errData.error;
         }
       } catch (e) {}
-      if (!quiet) setSyncStatus(errHint, 'red');
+      if (!quiet) {
+        const needsPat = /auth-required|rate limit|token required/i.test(errHint);
+        setSyncStatus(errHint, needsPat ? 'yellow' : 'red');
+      }
     } else if (!quiet && cloudToken) {
       setSyncStatus('GitHub list sync failed - check Cloud Sync token and repo settings.', 'red');
     }

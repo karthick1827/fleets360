@@ -99,9 +99,10 @@ async function init() {
 
   // Universal live auto-sync: automatically syncs when any agent (Claude Code, AGY, Gemini, Copilot, Cursor, etc.)
   // generates or updates markdown files in _acl-output/ without needing manual browser refresh
+  const liveSyncMs = /vercel\.app$/i.test(window.location.hostname) ? 30_000 : 4_000;
   setInterval(() => {
     syncFromLiveDisk(true);
-  }, 1500);
+  }, liveSyncMs);
 
   window.addEventListener('focus', () => {
     syncFromLiveDisk(true);
@@ -112,6 +113,12 @@ async function init() {
     syncIndicator.style.cursor = 'pointer';
     syncIndicator.title = 'Click to refresh from GitHub now';
     syncIndicator.addEventListener('click', () => {
+      const hasPat = Boolean((localStorage.getItem('acl_github_token') || '').trim());
+      if (!hasPat && typeof switchAppView === 'function') {
+        switchAppView('dashboard-git');
+        setSyncStatus('Add GitHub PAT below, then Save & Sync Now', 'yellow');
+        return;
+      }
       if (typeof window.forceGitHubLiveSync === 'function') {
         window.forceGitHubLiveSync();
       } else {

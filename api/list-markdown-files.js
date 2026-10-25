@@ -3,6 +3,28 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+/** Short-lived cache — reduces GitHub API calls (Vercel shared IP hits rate limits fast). */
+const githubListCache = new Map();
+const GITHUB_LIST_CACHE_TTL_MS = 45_000;
+
+function githubListCacheKey(owner, repo, branch, token) {
+  return `${owner}/${repo}@${branch}::${token ? 'auth' : 'anon'}`;
+}
+
+async function mapPool(items, limit, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i], i);
+    }
+  }
+  const workers = Math.min(limit, items.length, 8);
+  await Promise.all(Array.from({ length: workers }, () => worker()));
+  return results;
+}
+
 const EXCLUDED_FILENAMES = new Set([
   'skill.md',
   'agents.md',
@@ -226,6 +248,25 @@ async function universalHandler(arg1, arg2) {
     // 1. Fetch from GitHub API if owner and repo are known
     if (owner && repo) {
       try {
+        const isServerless = Boolean(process.env.VERCEL || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME);
+        if (isServerless && !token) {
+          return reply(401, {
+            success: false,
+            files: [],
+            source: 'github-auth-required',
+            error: 'GitHub token required for live sync on Vercel.',
+            hint: 'Open the menu → User Control Centre → GitHub Cloud Sync, enter a PAT (repo or contents:read), then Save & Sync Now.',
+            repo: `${owner}/${repo}`,
+            branch,
+          });
+        }
+
+        const cacheKey = githubListCacheKey(owner, repo, branch, token);
+        const cached = githubListCache.get(cacheKey);
+        if (cached && Date.now() - cached.at < GITHUB_LIST_CACHE_TTL_MS) {
+          return reply(200, cached.payload);
+        }
+
         const headers = {
           Accept: 'application/vnd.github.v3+json',
           'User-Agent': 'ACL-ADLC-Markdown-Studio',
@@ -243,8 +284,14 @@ async function universalHandler(arg1, arg2) {
         const treeRes = await fetch(treeUrl, { headers });
 
         if (!treeRes.ok) {
-          const isServerless = Boolean(process.env.VERCEL || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME);
           const errBody = await treeRes.text().catch(() => '');
+          let hint = token
+            ? 'Check token has repo or contents:read scope and access to this repository.'
+            : 'Add a Personal Access Token in User Control → GitHub Cloud Sync.';
+          if (/rate limit/i.test(errBody)) {
+            hint =
+              'GitHub API rate limit exceeded. Save your own PAT under User Control → GitHub Cloud Sync (uses your quota instead of Vercel shared IP). Wait a few minutes if you just hit the limit.';
+          }
           if (isServerless) {
             return reply(treeRes.status === 404 ? 404 : 403, {
               success: false,
@@ -252,9 +299,7 @@ async function universalHandler(arg1, arg2) {
               source: 'github-error',
               error: `GitHub tree API failed (${treeRes.status})`,
               detail: errBody.slice(0, 280),
-              hint: token
-                ? 'Check token has repo or contents:read scope and access to this repository.'
-                : 'Add a Personal Access Token in User Control → GitHub Cloud Sync (required for private repos on Vercel).',
+              hint,
               repo: `${owner}/${repo}`,
               branch,
             });
@@ -272,17 +317,14 @@ async function universalHandler(arg1, arg2) {
             return !isExcludedFile(path.basename(item.path));
           });
 
-          // Fetch blobs concurrently
-          const files = await Promise.all(
-            aclMdItems.map(async (item) => {
-              const relPath = item.path.replace(/^(_acl-output|_acl_output|acl-output)\/?/i, '');
-              const blobRes = await fetch(item.url, { headers });
-              if (!blobRes.ok) return null;
-              const blobJson = await blobRes.json();
-              const content = Buffer.from(blobJson.content, 'base64').toString('utf8');
-              return parseMarkdownMetadata(content, relPath);
-            }),
-          );
+          const files = await mapPool(aclMdItems, 6, async (item) => {
+            const relPath = item.path.replace(/^(_acl-output|_acl_output|acl-output)\/?/i, '');
+            const blobRes = await fetch(item.url, { headers });
+            if (!blobRes.ok) return null;
+            const blobJson = await blobRes.json();
+            const content = Buffer.from(blobJson.content, 'base64').toString('utf8');
+            return parseMarkdownMetadata(content, relPath);
+          });
 
           const validFiles = files.filter(Boolean);
 
@@ -327,8 +369,10 @@ async function universalHandler(arg1, arg2) {
             source: 'github',
             repo: `${owner}/${repo}`,
             branch: branch,
+            cachedAt: new Date().toISOString(),
           };
 
+          githubListCache.set(cacheKey, { at: Date.now(), payload: responsePayload });
           return reply(200, responsePayload);
         }
       } catch {
