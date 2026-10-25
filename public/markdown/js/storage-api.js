@@ -29,7 +29,10 @@ function mergeRemoteWithLocalSession(localFiles, remoteFiles) {
     const remoteTs = Date.parse(rf.updatedAt || 0) || 0;
     const localNewer = localTs > remoteTs + 500;
     const contentDiffers = (lf.content || '') !== (rf.content || '');
-    if (localNewer || (contentDiffers && localTs >= remoteTs)) {
+    const sessionOwned = Boolean(lf.sessionRevision);
+    const keepLocalContent =
+      localNewer || (contentDiffers && (localTs >= remoteTs || sessionOwned));
+    if (keepLocalContent) {
       merged.push({
         ...rf,
         content: lf.content,
@@ -57,10 +60,32 @@ function mergeRemoteWithLocalSession(localFiles, remoteFiles) {
   return merged;
 }
 
+function flushActiveEditorToSession() {
+  if (typeof getActiveFile !== 'function') return false;
+  const file = getActiveFile();
+  if (!file) return false;
+  const textarea = document.getElementById('markdownTextarea');
+  if (!textarea) return false;
+  const val = textarea.value;
+  if (val === file.content) return false;
+  file.content = val;
+  file.status =
+    document.getElementById('statusSelect')?.value === 'Accepted'
+      ? 'Approved'
+      : document.getElementById('statusSelect')?.value || file.status;
+  file.updatedAt = new Date().toISOString();
+  file.sessionRevision = Date.now();
+  try {
+    localStorage.setItem('acl_adlc_project_markdown_files', JSON.stringify(files));
+  } catch (e) {}
+  return true;
+}
+
 async function syncFromLiveDisk(quiet = false) {
   if (isSyncing || isSaving || Date.now() - lastSaveTime < 3500) return false;
   isSyncing = true;
   try {
+    flushActiveEditorToSession();
     const cloudToken = (localStorage.getItem('acl_github_token') || '').trim();
     const cloudOwner = (localStorage.getItem('acl_github_owner') || '').trim();
     const cloudRepo = (localStorage.getItem('acl_github_repo') || '').trim();
@@ -162,7 +187,8 @@ async function syncFromLiveDisk(quiet = false) {
 
         if (hasChanged || files.length === 0) {
           const prevActiveFile = files.find((f) => f.id === activeFileId);
-          files = files.length > 0 && !isDirty ? mergeRemoteWithLocalSession(files, normIncoming) : normIncoming;
+          files =
+            files.length > 0 ? mergeRemoteWithLocalSession(files, normIncoming) : normIncoming;
           try {
             localStorage.setItem('acl_adlc_project_markdown_files', JSON.stringify(files));
           } catch (e) {}
@@ -421,6 +447,8 @@ async function onStatusChange(newStatus) {
 if (typeof window !== 'undefined') {
   window.parseStatusFromMarkdown = parseStatusFromMarkdown;
   window.saveCurrentFile = saveCurrentFile;
+  window.flushActiveEditorToSession = flushActiveEditorToSession;
+  window.persistFilesToBrowserSession = persistFilesToBrowserSession;
   window.onStatusChange = onStatusChange;
   window.syncFromLiveDisk = syncFromLiveDisk;
   window.refreshTree = async function (quiet = false) {

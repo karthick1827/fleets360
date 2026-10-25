@@ -1879,6 +1879,14 @@ async function ensureAtlassianWorkspaceFiles() {
 }
 
 async function atlassianApiPayloadAsync(extra = {}) {
+  if (typeof window.flushActiveEditorToSession === 'function') {
+    window.flushActiveEditorToSession();
+  }
+  if (typeof window.saveCurrentFile === 'function' && typeof isDirty !== 'undefined' && isDirty) {
+    try {
+      await window.saveCurrentFile();
+    } catch (e) {}
+  }
   const stored = readAtlassianClientConfig();
   const workspaceFiles = await ensureAtlassianWorkspaceFiles();
   return {
@@ -1917,6 +1925,7 @@ function applyAtlassianClientFiles(clientFiles) {
       files[idx].status = pulledStatus;
       files[idx].updatedAt = now;
       files[idx].sessionRevision = Date.now();
+      files[idx].sessionFromAtlassian = true;
       changed = true;
     } else {
       files.push({
@@ -1928,6 +1937,7 @@ function applyAtlassianClientFiles(clientFiles) {
         createdAt: now,
         updatedAt: now,
         sessionRevision: Date.now(),
+        sessionFromAtlassian: true,
       });
       changed = true;
     }

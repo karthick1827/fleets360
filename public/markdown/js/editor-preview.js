@@ -129,6 +129,15 @@ function setViewMode(mode) {
 
 function handleContentInput() {
   isDirty = true;
+  const file = typeof getActiveFile === 'function' ? getActiveFile() : null;
+  const textarea = document.getElementById('markdownTextarea');
+  if (file && textarea) {
+    file.content = textarea.value;
+    file.sessionRevision = Date.now();
+    if (typeof persistFilesToBrowserSession === 'function') {
+      persistFilesToBrowserSession();
+    }
+  }
   setSyncStatus('Unsaved changes...', 'yellow');
   if (typeof updateGmailButtonState === 'function') {
     updateGmailButtonState();
