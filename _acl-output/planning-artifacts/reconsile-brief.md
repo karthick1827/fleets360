@@ -1,7 +1,7 @@
 ---
 status: In Review
 reviewed_by: Manager (via Markdown Studio)
-review_timestamp: 2026-10-25T06:59:45.673Z
+review_timestamp: 2026-10-25T07:41:55.144Z
 gate_signature: ACL-STUDIO-APPROVAL-IN-REVIEW
 title: "Reconsile Brief"
 confluence_page_id: 7176193
@@ -20,7 +20,7 @@ created: 2026-10-25
 
 -
 
-[X] `/profile` route  registered under auth layout
+[X] `/profile` route mafia registered under auth layout
 
 -
 
