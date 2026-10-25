@@ -10,6 +10,6 @@ jira_key: EW-114
 
 ## Acceptance Criteria
 
-- [x] `/profile` route registered under auth layout
+- [x] `/profile` route mafia registered under auth layout
 - [x] Page shows email from session
 - [x] `RequireAuth` redirects unauthenticated visitors to `/login`
