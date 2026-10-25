@@ -1,5 +1,12 @@
 function loadFile(id, openFolder = false) {
   if (!id) return;
+  if (
+    activeFileId &&
+    activeFileId !== id &&
+    typeof window.flushActiveEditorToSession === 'function'
+  ) {
+    window.flushActiveEditorToSession();
+  }
   let file = (files || []).find((f) => f.id === id);
   if (!file) {
     const fn = id.replace(/^\.\//, '').toLowerCase();
@@ -19,6 +26,9 @@ function loadFile(id, openFolder = false) {
     }
   }
   activeFileId = file.id;
+  try {
+    localStorage.setItem('acl_active_file_id', file.id);
+  } catch (e) {}
   if (openFolder) {
     openFolders.clear();
     openFolders.add(getFileFolderGroup(file));
@@ -134,8 +144,11 @@ function handleContentInput() {
   if (file && textarea) {
     file.content = textarea.value;
     file.sessionRevision = Date.now();
-    if (typeof persistFilesToBrowserSession === 'function') {
-      persistFilesToBrowserSession();
+    if (typeof window.armSessionSyncGuard === 'function') {
+      window.armSessionSyncGuard();
+    }
+    if (typeof window.persistFilesToBrowserSession === 'function') {
+      window.persistFilesToBrowserSession();
     }
   }
   setSyncStatus('Unsaved changes...', 'yellow');

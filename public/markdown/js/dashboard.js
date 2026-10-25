@@ -1836,8 +1836,11 @@ function githubSyncContext() {
 }
 
 async function ensureAtlassianWorkspaceFiles() {
+  if (typeof window.flushActiveEditorToSession === 'function') {
+    window.flushActiveEditorToSession();
+  }
   const current = getAtlassianWorkspaceFiles();
-  if (current.length > 0 && current.some((f) => f.content && String(f.content).length > 32)) {
+  if (current.length > 0) {
     return current;
   }
 
@@ -1864,12 +1867,6 @@ async function ensureAtlassianWorkspaceFiles() {
           content: f.content,
           status: f.status,
         }));
-        if (typeof files !== 'undefined' && Array.isArray(files) && files.length === 0) {
-          files = data.files;
-          try {
-            localStorage.setItem('acl_adlc_project_markdown_files', JSON.stringify(files));
-          } catch (e) {}
-        }
         return mapped;
       }
     }
@@ -1889,6 +1886,9 @@ async function atlassianApiPayloadAsync(extra = {}) {
   }
   const stored = readAtlassianClientConfig();
   const workspaceFiles = await ensureAtlassianWorkspaceFiles();
+  if (typeof window.persistFilesToBrowserSession === 'function') {
+    window.persistFilesToBrowserSession();
+  }
   return {
     ...stored,
     ...githubSyncContext(),
@@ -1896,6 +1896,21 @@ async function atlassianApiPayloadAsync(extra = {}) {
     workspaceFiles,
     clientMapping: readAtlassianClientMapping(),
   };
+}
+
+function clientFilesFirstStudioFile(clientFiles) {
+  if (!Array.isArray(clientFiles) || clientFiles.length === 0 || typeof files === 'undefined') return null;
+  const normPath = (rel) => String(rel || '').replace(/\\/g, '/').replace(/^_acl-output\/?/, '');
+  for (const item of clientFiles) {
+    if (!item || !item.relativePath) continue;
+    const rel = normPath(item.relativePath);
+    const parts = rel.split('/').filter(Boolean);
+    const filename = parts.pop() || '';
+    const folderPath = parts.length ? parts.join('/') : 'root';
+    const hit = files.find((f) => f.filename === filename && (f.folderPath || 'root') === folderPath);
+    if (hit) return hit;
+  }
+  return null;
 }
 
 function applyAtlassianClientFiles(clientFiles) {
@@ -1947,11 +1962,11 @@ function applyAtlassianClientFiles(clientFiles) {
     try {
       localStorage.setItem('acl_adlc_project_markdown_files', JSON.stringify(files));
     } catch (e) {}
+    if (typeof window.armSessionSyncGuard === 'function') {
+      window.armSessionSyncGuard();
+    }
     if (typeof renderFileTree === 'function') renderFileTree();
     if (typeof evaluateProceedButton === 'function') evaluateProceedButton();
-    if (typeof loadFile === 'function' && typeof activeFileId !== 'undefined' && activeFileId) {
-      loadFile(activeFileId);
-    }
   }
   return changed;
 }
@@ -2375,6 +2390,9 @@ window.executeJiraPull = async function () {
     });
     const result = res.data;
     if (atlassianResultOk(res, result)) {
+      if (typeof window.armSessionSyncGuard === 'function') {
+        window.armSessionSyncGuard();
+      }
       if (result.mapping) writeAtlassianClientMapping(result.mapping);
       if (result.clientFiles && result.clientFiles.length > 0) {
         applyAtlassianClientFiles(result.clientFiles);
@@ -2403,11 +2421,16 @@ window.executeJiraPull = async function () {
       }
       displaySyncResultBanner(bannerMsg, 'jira');
       renderAtlassianSuite(true);
-      if (typeof window.syncFromLiveDisk === 'function' && !(result.clientFiles && result.clientFiles.length > 0)) {
-        await window.syncFromLiveDisk(false);
-      }
-      if (typeof loadFile === 'function' && typeof activeFileId !== 'undefined' && activeFileId) {
-        loadFile(activeFileId);
+      if (result.clientFiles && result.clientFiles.length > 0 && typeof switchAppView === 'function') {
+        switchAppView('studio');
+        const first = clientFilesFirstStudioFile(result.clientFiles);
+        if (first && typeof loadFile === 'function') {
+          activeFileId = first.id;
+          try {
+            localStorage.setItem('acl_active_file_id', first.id);
+          } catch (e) {}
+          loadFile(first.id);
+        }
       }
     } else {
       const err =
@@ -2494,6 +2517,9 @@ window.executeConfluencePull = async function () {
     });
     const result = res.data;
     if (atlassianResultOk(res, result)) {
+      if (typeof window.armSessionSyncGuard === 'function') {
+        window.armSessionSyncGuard();
+      }
       if (result.mapping) writeAtlassianClientMapping(result.mapping);
       if (result.clientFiles && result.clientFiles.length > 0) {
         applyAtlassianClientFiles(result.clientFiles);
@@ -2522,11 +2548,16 @@ window.executeConfluencePull = async function () {
       }
       displaySyncResultBanner(bannerMsg, 'confluence');
       renderAtlassianSuite(true);
-      if (typeof window.syncFromLiveDisk === 'function' && !(result.clientFiles && result.clientFiles.length > 0)) {
-        await window.syncFromLiveDisk(false);
-      }
-      if (typeof loadFile === 'function' && typeof activeFileId !== 'undefined' && activeFileId) {
-        loadFile(activeFileId);
+      if (result.clientFiles && result.clientFiles.length > 0 && typeof switchAppView === 'function') {
+        switchAppView('studio');
+        const first = clientFilesFirstStudioFile(result.clientFiles);
+        if (first && typeof loadFile === 'function') {
+          activeFileId = first.id;
+          try {
+            localStorage.setItem('acl_active_file_id', first.id);
+          } catch (e) {}
+          loadFile(first.id);
+        }
       }
     } else {
       const err =

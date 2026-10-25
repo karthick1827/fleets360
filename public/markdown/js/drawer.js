@@ -60,6 +60,10 @@ if (document.readyState === 'loading') {
 }
 
 function switchAppView(view) {
+  const leavingStudio = activeAppView === 'studio' && view !== 'studio';
+  if (leavingStudio && typeof window.flushActiveEditorToSession === 'function') {
+    window.flushActiveEditorToSession();
+  }
   activeAppView = view;
   closeNavDrawer();
 

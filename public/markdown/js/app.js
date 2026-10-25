@@ -35,23 +35,48 @@ async function init() {
       }
     })
     .catch(() => {});
-  const synced = await syncFromLiveDisk(true);
-
-  if (!synced && files.length === 0) {
-    try {
-      const cached = localStorage.getItem('acl_adlc_project_markdown_files');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          files = parsed
-            .filter((f) => !isChildFile(f.filename, f.folderPath))
-            .map((f) => ({
-              ...f,
-              status: f.status === 'Accepted' || f.status === 'approved' ? 'Approved' : f.status || 'In Review',
-            }));
+  try {
+    if (localStorage.getItem('acl_session_sync_guard') && typeof window.armSessionSyncGuard === 'function') {
+      window.armSessionSyncGuard();
+    } else {
+      const cachedForGuard = localStorage.getItem('acl_adlc_project_markdown_files');
+      if (cachedForGuard) {
+        const parsedGuard = JSON.parse(cachedForGuard);
+        if (
+          Array.isArray(parsedGuard) &&
+          parsedGuard.some((f) => f.sessionRevision || f.sessionFromAtlassian) &&
+          typeof window.armSessionSyncGuard === 'function'
+        ) {
+          window.armSessionSyncGuard();
         }
       }
-    } catch (e) {}
+    }
+  } catch (e) {}
+
+  const hydrated =
+    typeof window.hydrateFilesFromLocalStorage === 'function' && window.hydrateFilesFromLocalStorage();
+
+  const synced = hydrated && typeof window.isSessionSyncGuarded === 'function' && window.isSessionSyncGuarded()
+    ? false
+    : await syncFromLiveDisk(true);
+
+  if ((!synced || hydrated) && files.length === 0) {
+    if (!hydrated) {
+      try {
+        const cached = localStorage.getItem('acl_adlc_project_markdown_files');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            files = parsed
+              .filter((f) => !isChildFile(f.filename, f.folderPath))
+              .map((f) => ({
+                ...f,
+                status: f.status === 'Accepted' || f.status === 'approved' ? 'Approved' : f.status || 'In Review',
+              }));
+          }
+        }
+      } catch (e) {}
+    }
 
     if (files.length === 0 && Array.isArray(window.__ACL_EMBEDDED_FILES__) && window.__ACL_EMBEDDED_FILES__.length > 0) {
       files = window.__ACL_EMBEDDED_FILES__
@@ -67,13 +92,12 @@ async function init() {
         activeFileId = getInitialActiveFileId(files);
       }
       renderFileTree();
-      if (activeFileId) {
-        loadFile(activeFileId);
-      }
     } else {
       renderFileTree();
       loadEmptyState();
     }
+  } else if (hydrated && files.length > 0) {
+    renderFileTree();
   }
 
   // Open Summarized Dashboard by default when visiting /markdown.html; #working-tree etc. deep-link to a view

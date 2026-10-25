@@ -12,10 +12,33 @@ function parseStatusFromMarkdown(content) {
   return 'In Review';
 }
 
+const ACL_SESSION_SYNC_GUARD_KEY = 'acl_session_sync_guard';
+
+function isSessionSyncGuarded() {
+  try {
+    return Boolean(localStorage.getItem(ACL_SESSION_SYNC_GUARD_KEY));
+  } catch {
+    return false;
+  }
+}
+
+function armSessionSyncGuard() {
+  try {
+    localStorage.setItem(ACL_SESSION_SYNC_GUARD_KEY, String(Date.now()));
+  } catch (e) {}
+}
+
+function clearSessionSyncGuard() {
+  try {
+    localStorage.removeItem(ACL_SESSION_SYNC_GUARD_KEY);
+  } catch (e) {}
+}
+
 function mergeRemoteWithLocalSession(localFiles, remoteFiles) {
   const remoteMap = new Map((remoteFiles || []).map((f) => [fileStorageKey(f), f]));
   const merged = [];
   const seen = new Set();
+  const guardActive = isSessionSyncGuarded();
 
   for (const lf of localFiles || []) {
     const key = fileStorageKey(lf);
@@ -25,13 +48,24 @@ function mergeRemoteWithLocalSession(localFiles, remoteFiles) {
       merged.push(lf);
       continue;
     }
+    const sessionOwned = Boolean(lf.sessionRevision || lf.sessionFromAtlassian);
+    if (guardActive || sessionOwned) {
+      merged.push({
+        ...rf,
+        ...lf,
+        content: lf.content,
+        status: lf.status || parseStatusFromMarkdown(lf.content),
+        updatedAt: lf.updatedAt || rf.updatedAt,
+        sessionRevision: lf.sessionRevision,
+        sessionFromAtlassian: lf.sessionFromAtlassian,
+      });
+      continue;
+    }
     const localTs = Date.parse(lf.updatedAt || 0) || Number(lf.sessionRevision || 0) || 0;
     const remoteTs = Date.parse(rf.updatedAt || 0) || 0;
     const localNewer = localTs > remoteTs + 500;
     const contentDiffers = (lf.content || '') !== (rf.content || '');
-    const sessionOwned = Boolean(lf.sessionRevision);
-    const keepLocalContent =
-      localNewer || (contentDiffers && (localTs >= remoteTs || sessionOwned));
+    const keepLocalContent = localNewer || (contentDiffers && localTs >= remoteTs);
     if (keepLocalContent) {
       merged.push({
         ...rf,
@@ -81,11 +115,50 @@ function flushActiveEditorToSession() {
   return true;
 }
 
+function hydrateFilesFromLocalStorage() {
+  try {
+    const raw = localStorage.getItem('acl_adlc_project_markdown_files');
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) return false;
+    files = parsed
+      .filter((f) => !isChildFile(f.filename, f.folderPath))
+      .map((f) => ({
+        ...f,
+        status:
+          f.status === 'Accepted' || f.status === 'approved' || f.status === 'Approved'
+            ? 'Approved'
+            : f.status || 'In Review',
+      }));
+    const savedActive = localStorage.getItem('acl_active_file_id');
+    if (savedActive && files.some((f) => f.id === savedActive)) {
+      activeFileId = savedActive;
+    } else if (!activeFileId || !files.some((f) => f.id === activeFileId)) {
+      activeFileId = getInitialActiveFileId(files);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function syncFromLiveDisk(quiet = false) {
   if (isSyncing || isSaving || Date.now() - lastSaveTime < 3500) return false;
+  flushActiveEditorToSession();
+  if (isSessionSyncGuarded()) {
+    try {
+      localStorage.setItem('acl_adlc_project_markdown_files', JSON.stringify(files));
+    } catch (e) {}
+    if (!quiet) {
+      setSyncStatus(
+        'Studio session kept (Jira/Confluence edits). Push to JIRA/Confluence or Save to persist; clear guard via Save to GitHub.',
+        'yellow',
+      );
+    }
+    return false;
+  }
   isSyncing = true;
   try {
-    flushActiveEditorToSession();
     const cloudToken = (localStorage.getItem('acl_github_token') || '').trim();
     const cloudOwner = (localStorage.getItem('acl_github_owner') || '').trim();
     const cloudRepo = (localStorage.getItem('acl_github_repo') || '').trim();
@@ -198,7 +271,11 @@ async function syncFromLiveDisk(quiet = false) {
           renderFileTree();
           const currentActiveFile = files.find((f) => f.id === activeFileId);
           const activeContentChanged = !prevActiveFile || (currentActiveFile && prevActiveFile.content !== currentActiveFile.content);
-          if (activeFileId && !isDirty && activeContentChanged) {
+          const activeAfterMerge = files.find((f) => f.id === activeFileId);
+          const skipReloadActive =
+            activeAfterMerge &&
+            (activeAfterMerge.sessionRevision || activeAfterMerge.sessionFromAtlassian || isSessionSyncGuarded());
+          if (activeFileId && !isDirty && activeContentChanged && !skipReloadActive) {
             loadFile(activeFileId);
           }
           if (activeAppView === 'dashboard' || activeAppView === 'dashboard-summarized') {
@@ -257,6 +334,7 @@ async function saveCurrentFile() {
   file.status = status === 'Accepted' ? 'Approved' : status;
   file.updatedAt = nowIso;
   file.sessionRevision = Date.now();
+  armSessionSyncGuard();
 
   renderPreview();
   persistFilesToBrowserSession();
@@ -298,6 +376,7 @@ async function saveCurrentFile() {
     if (resp.ok && resData.success !== false) {
       lastSaveTime = Date.now();
       if (resData.gitPushed) {
+        clearSessionSyncGuard();
         setSyncStatus('Saved to IDE & pushed to GitHub', 'green');
       } else if (cloudToken && resData.mode === 'github') {
         setSyncStatus('Saved to IDE (GitHub push pending)', 'yellow');
@@ -421,6 +500,7 @@ async function onStatusChange(newStatus) {
   file.status = newStatus === 'Accepted' ? 'Approved' : newStatus;
   file.updatedAt = nowIso;
   file.sessionRevision = Date.now();
+  armSessionSyncGuard();
 
   const currentContent = document.getElementById('markdownTextarea').value || '';
   const updatedContent = updateDocumentStatusFrontmatter(currentContent, newStatus, nowIso);
@@ -449,6 +529,10 @@ if (typeof window !== 'undefined') {
   window.saveCurrentFile = saveCurrentFile;
   window.flushActiveEditorToSession = flushActiveEditorToSession;
   window.persistFilesToBrowserSession = persistFilesToBrowserSession;
+  window.armSessionSyncGuard = armSessionSyncGuard;
+  window.clearSessionSyncGuard = clearSessionSyncGuard;
+  window.hydrateFilesFromLocalStorage = hydrateFilesFromLocalStorage;
+  window.isSessionSyncGuarded = isSessionSyncGuarded;
   window.onStatusChange = onStatusChange;
   window.syncFromLiveDisk = syncFromLiveDisk;
   window.refreshTree = async function (quiet = false) {
