@@ -491,6 +491,118 @@ function refreshActiveFileStatusPill(status) {
   pill.innerHTML = `<span class="dot"></span>${normStatus}`;
 }
 
+function clientFilesToGitHubEntries(clientFiles) {
+  const normPath = (rel) => String(rel || '').replace(/\\/g, '/').replace(/^_acl-output\/?/, '');
+  const out = [];
+  for (const item of clientFiles || []) {
+    if (!item || typeof item.content !== 'string') continue;
+    const rel = normPath(item.relativePath);
+    const parts = rel.split('/').filter(Boolean);
+    const filename = parts.pop() || 'document.md';
+    const folderPath = parts.length ? parts.join('/') : 'root';
+    out.push({
+      folderPath,
+      filename,
+      content: item.content,
+      status: parseStatusFromMarkdown(item.content),
+    });
+  }
+  return out;
+}
+
+function studioFilesToGitHubEntries(fileList) {
+  const out = [];
+  for (const f of fileList || []) {
+    if (!f || !f.filename || typeof f.content !== 'string') continue;
+    out.push({
+      folderPath: f.folderPath || 'root',
+      filename: f.filename,
+      content: f.content,
+      status: f.status || parseStatusFromMarkdown(f.content),
+    });
+  }
+  return out;
+}
+
+/**
+ * Commit one or more markdown files to GitHub via /api/save-markdown (requires Cloud Sync token).
+ */
+async function commitMarkdownEntriesToGitHub(entries) {
+  const list = (entries || []).filter((e) => e && e.filename && typeof e.content === 'string');
+  if (list.length === 0) {
+    return { success: true, skipped: true, pushed: [], failed: [], reason: 'No files to commit.' };
+  }
+
+  const cloudToken = (localStorage.getItem('acl_github_token') || '').trim();
+  const cloudOwner = (localStorage.getItem('acl_github_owner') || '').trim();
+  const cloudRepo = (localStorage.getItem('acl_github_repo') || '').trim();
+  const cloudBranch = (localStorage.getItem('acl_github_branch') || '').trim() || 'main';
+
+  if (!cloudToken) {
+    return {
+      success: false,
+      skipped: true,
+      pushed: [],
+      failed: [],
+      reason: 'Add a GitHub personal access token in User Control (Cloud Sync).',
+    };
+  }
+
+  const pushed = [];
+  const failed = [];
+  const saveEndpoint = (window.__ACL_LIVE_ENDPOINT__ || '') + '/api/save-markdown';
+
+  for (const entry of list) {
+    try {
+      const headers = {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + cloudToken,
+        'X-GitHub-Token': cloudToken,
+      };
+      const bodyPayload = {
+        folderPath: entry.folderPath,
+        filename: entry.filename,
+        content: entry.content,
+        status: entry.status,
+        githubToken: cloudToken,
+        githubOwner: cloudOwner || undefined,
+        githubRepo: cloudRepo || undefined,
+        githubBranch: cloudBranch || undefined,
+      };
+      const resp = await fetch(saveEndpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(bodyPayload),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (resp.ok && data.gitPushed) {
+        pushed.push({ filename: entry.filename, path: data.path, commitSha: data.commitSha });
+      } else {
+        failed.push({
+          filename: entry.filename,
+          error: data.error || data.message || `HTTP ${resp.status}`,
+        });
+      }
+    } catch (err) {
+      failed.push({ filename: entry.filename, error: err.message || String(err) });
+    }
+  }
+
+  const success = failed.length === 0 && pushed.length > 0;
+  if (success) {
+    clearSessionSyncGuard();
+  }
+
+  return {
+    success,
+    skipped: false,
+    pushed,
+    failed,
+    repo: cloudOwner && cloudRepo ? `${cloudOwner}/${cloudRepo}` : 'linked repository',
+    branch: cloudBranch,
+  };
+}
+
 async function onStatusChange(newStatus) {
   const file = getActiveFile();
   if (!file) return;
@@ -533,6 +645,9 @@ if (typeof window !== 'undefined') {
   window.clearSessionSyncGuard = clearSessionSyncGuard;
   window.hydrateFilesFromLocalStorage = hydrateFilesFromLocalStorage;
   window.isSessionSyncGuarded = isSessionSyncGuarded;
+  window.clientFilesToGitHubEntries = clientFilesToGitHubEntries;
+  window.studioFilesToGitHubEntries = studioFilesToGitHubEntries;
+  window.commitMarkdownEntriesToGitHub = commitMarkdownEntriesToGitHub;
   window.onStatusChange = onStatusChange;
   window.syncFromLiveDisk = syncFromLiveDisk;
   window.refreshTree = async function (quiet = false) {

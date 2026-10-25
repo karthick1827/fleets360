@@ -1898,6 +1898,45 @@ async function atlassianApiPayloadAsync(extra = {}) {
   };
 }
 
+async function appendGitHubCommitMessageForClientFiles(bannerMsg, clientFiles) {
+  if (!clientFiles || clientFiles.length === 0 || typeof window.commitMarkdownEntriesToGitHub !== 'function') {
+    return bannerMsg;
+  }
+  const entries =
+    typeof window.clientFilesToGitHubEntries === 'function'
+      ? window.clientFilesToGitHubEntries(clientFiles)
+      : [];
+  if (!entries.length) return bannerMsg;
+  const gh = await window.commitMarkdownEntriesToGitHub(entries);
+  if (gh.skipped) {
+    return bannerMsg + ' ⚠️ GitHub: ' + (gh.reason || 'Cloud Sync not configured.');
+  }
+  if (gh.success) {
+    return bannerMsg + ` ✅ GitHub: committed ${gh.pushed.length} file(s) to ${gh.repo}@${gh.branch}.`;
+  }
+  if (gh.failed && gh.failed.length) {
+    return (
+      bannerMsg +
+      ` ⚠️ GitHub: ${gh.failed.length} commit(s) failed (${gh.failed[0].filename}: ${gh.failed[0].error}).`
+    );
+  }
+  return bannerMsg;
+}
+
+async function commitSessionWorkspaceToGitHub() {
+  if (typeof files === 'undefined' || typeof window.commitMarkdownEntriesToGitHub !== 'function') {
+    return null;
+  }
+  if (typeof window.flushActiveEditorToSession === 'function') {
+    window.flushActiveEditorToSession();
+  }
+  const entries = window.studioFilesToGitHubEntries(
+    files.filter((f) => f.sessionFromAtlassian || f.sessionRevision),
+  );
+  if (!entries.length) return null;
+  return await window.commitMarkdownEntriesToGitHub(entries);
+}
+
 function clientFilesFirstStudioFile(clientFiles) {
   if (!Array.isArray(clientFiles) || clientFiles.length === 0 || typeof files === 'undefined') return null;
   const normPath = (rel) => String(rel || '').replace(/\\/g, '/').replace(/^_acl-output\/?/, '');
@@ -2351,10 +2390,16 @@ window.executeJiraSync = async function () {
     const result = res.data;
     if (atlassianResultOk(res, result)) {
       recordAtlassianSyncResult(result, 'JIRA Epics & Stories Sync (Push)');
-      displaySyncResultBanner(
-        `🎯 Successfully synced ${result.totalStories} story file(s) to JIRA (${result.projectKey}) — in-place updates, no duplicates.`,
-        'jira',
-      );
+      let pushBanner = `🎯 Successfully synced ${result.totalStories} story file(s) to JIRA (${result.projectKey}) — in-place updates, no duplicates.`;
+      const gh = await commitSessionWorkspaceToGitHub();
+      if (gh && gh.skipped) {
+        pushBanner += ' ⚠️ GitHub: ' + (gh.reason || 'Cloud Sync not configured.');
+      } else if (gh && gh.success) {
+        pushBanner += ` ✅ GitHub: committed ${gh.pushed.length} file(s).`;
+      } else if (gh && gh.failed && gh.failed.length) {
+        pushBanner += ` ⚠️ GitHub: ${gh.failed[0].error}`;
+      }
+      displaySyncResultBanner(pushBanner, 'jira');
       renderAtlassianSuite(true);
     } else {
       const err =
@@ -2418,6 +2463,7 @@ window.executeJiraPull = async function () {
       }
       if (result.clientFiles && result.clientFiles.length > 0) {
         bannerMsg += ' Updated ' + result.clientFiles.length + ' file(s) in this browser session.';
+        bannerMsg = await appendGitHubCommitMessageForClientFiles(bannerMsg, result.clientFiles);
       }
       displaySyncResultBanner(bannerMsg, 'jira');
       renderAtlassianSuite(true);
@@ -2478,10 +2524,16 @@ window.executeConfluenceSync = async function () {
         result.updatedCount !== undefined
           ? `(${result.updatedCount} updated in-place, ${result.createdCount} published - no duplicates!)`
           : '';
-      displaySyncResultBanner(
-        `📘 Successfully synced ${result.totalPages} Phase Deliverables to Confluence Space ${result.spaceKey} ${detailMsg}`,
-        'confluence',
-      );
+      let confPushBanner = `📘 Successfully synced ${result.totalPages} Phase Deliverables to Confluence Space ${result.spaceKey} ${detailMsg}`;
+      const gh = await commitSessionWorkspaceToGitHub();
+      if (gh && gh.skipped) {
+        confPushBanner += ' ⚠️ GitHub: ' + (gh.reason || 'Cloud Sync not configured.');
+      } else if (gh && gh.success) {
+        confPushBanner += ` ✅ GitHub: committed ${gh.pushed.length} file(s).`;
+      } else if (gh && gh.failed && gh.failed.length) {
+        confPushBanner += ` ⚠️ GitHub: ${gh.failed[0].error}`;
+      }
+      displaySyncResultBanner(confPushBanner, 'confluence');
       renderAtlassianSuite(true);
     } else {
       const err =
@@ -2545,6 +2597,7 @@ window.executeConfluencePull = async function () {
       }
       if (result.clientFiles && result.clientFiles.length > 0) {
         bannerMsg += ' Updated ' + result.clientFiles.length + ' file(s) in this browser session.';
+        bannerMsg = await appendGitHubCommitMessageForClientFiles(bannerMsg, result.clientFiles);
       }
       displaySyncResultBanner(bannerMsg, 'confluence');
       renderAtlassianSuite(true);
