@@ -1,45 +1,21 @@
 ---
-jira_key: EW-109
-status: Approved
-reviewed_by: Manager (via Markdown Studio)
-review_timestamp: 2026-09-16T07:12:15.284Z
-gate_signature: ACL-STUDIO-APPROVAL-APPROVED
-title: Canonical route table (Story 3.1)
+status: In Review
+title: Canonical route table
 type: feature
-created: 2026-09-16
-story_key: 3-1-canonical-route-table
-baseline_commit: NO_VCS
-context:
-  - ../../../_acl-output/planning-artifacts/epics.md
+created: 2026-10-26
+story_id: 3.1
+epic_id: 3
+jira_key: FLEETS-14
+tier: Tier 1 (Self-Contained)
 ---
 
-<frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
+# Story 3.1: Canonical route table
 
-## Intent
+## Description
 
 **Problem:** Applications need unambiguous URL mappings for guest and authenticated screens adhering to AD-1 invariants.
 
 **Approach:** Configure central route table in `src/App.jsx` with routes for `/login`, `/forgot-password`, `/home`, `/profile`, `/devices`, `/sites`, `/users`, and root redirect `/` to `/login`.
-
-## Boundaries & Constraints
-
-**Always:** Follow kebab-case naming for URL paths. Group protected routes under auth guards.
-
-**Never:** Allow undefined routes to show blank screens without fallback routing.
-
-</frozen-after-approval>
-
-## Code Map
-
-- `src/App.jsx` — central route table definition
-- `src/main.jsx` — React Router browser router container
-
-## Tasks & Acceptance
-
-**Execution:**
-- [x] Configure routes for `/login`, `/forgot-password`, `/home`, `/profile`, `/devices`, `/sites`, `/users`
-- [x] Configure `/` to redirect to `/login`
-- [x] Maintain separation between guest and authenticated layouts
 
 ## Acceptance Criteria
 
@@ -53,4 +29,4 @@ context:
 
 ## Spec Change Log
 
-- 2026-09-16: Story 3.1 implemented and verified
+- 2026-10-26: Story 3.1 imported from JIRA board ticket FLEETS-14 (Status: In Review).
