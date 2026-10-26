@@ -1,46 +1,21 @@
 ---
-jira_key: EW-104
-status: Approved
-reviewed_by: Manager (via Markdown Studio)
-review_timestamp: 2026-09-16T07:12:15.284Z
-gate_signature: ACL-STUDIO-APPROVAL-APPROVED
-title: Authenticate and redirect (Story 1.3)
+status: In Review
+title: Authenticate and redirect
 type: feature
-created: 2026-09-16
-story_key: 1-3-authenticate-and-redirect
-baseline_commit: NO_VCS
-context:
-  - ../../../_acl-output/planning-artifacts/epics.md
+created: 2026-10-26
+story_id: 1.3
+epic_id: 1
+jira_key: FLEETS-9
+tier: Tier 1 (Self-Contained)
 ---
 
-<frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
+# Story 1.3: Authenticate and redirect
 
-## Intent
+## Description
 
 **Problem:** Operator credentials must be authenticated securely and lead to the post-login hub without leaking account existence on error.
 
 **Approach:** Connect Login form to auth module stub (`loginUser`), establish session on success, navigate to `/home`, and display single uniform error message on failure.
-
-## Boundaries & Constraints
-
-**Always:** Generic error messages for bad credentials (AD-7); establish session records via `src/auth/session.js`.
-
-**Never:** Field-specific credential errors or passwords in URLs/logs/unencrypted storage.
-
-</frozen-after-approval>
-
-## Code Map
-
-- `src/pages/Login.jsx` — invokes `loginUser` on valid form submit
-- `src/auth/loginUser.js` — handles credential validation and session establishment
-- `src/auth/session.js` — session storage with TTL management
-
-## Tasks & Acceptance
-
-**Execution:**
-- [x] Wire `loginUser` to submit handler
-- [x] Establish session and redirect to `/home` on successful authentication
-- [x] Generic error handling for invalid credentials
 
 ## Acceptance Criteria
 
@@ -54,4 +29,4 @@ context:
 
 ## Spec Change Log
 
-- 2026-09-16: Story 1.3 implemented and verified
+- 2026-10-26: Story 1.3 imported from JIRA board ticket FLEETS-9 (Status: In Review).
