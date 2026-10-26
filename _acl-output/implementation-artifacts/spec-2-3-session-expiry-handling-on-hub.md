@@ -1,46 +1,21 @@
 ---
-jira_key: EW-108
-status: Approved
-reviewed_by: Manager (via Markdown Studio)
-review_timestamp: 2026-09-16T07:12:15.284Z
-gate_signature: ACL-STUDIO-APPROVAL-APPROVED
-title: Session expiry handling on hub (Story 2.3)
+status: In Review
+title: Session expiry handling on hub
 type: feature
-created: 2026-09-16
-story_key: 2-3-session-expiry-handling-on-hub
-baseline_commit: NO_VCS
-context:
-  - ../../../_acl-output/planning-artifacts/epics.md
+created: 2026-10-26
+story_id: 2.3
+epic_id: 2
+jira_key: FLEETS-13
+tier: Tier 1 (Self-Contained)
 ---
 
-<frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
+# Story 2.3: Session expiry handling on hub
 
-## Intent
+## Description
 
 **Problem:** If an operator's session expires while they are idle or refreshing the hub, the application must safely terminate the session and redirect to Login.
 
 **Approach:** Verify session TTL in `RequireAuth` and `session.js`; redirect expired sessions to `/login` with an informational notice.
-
-## Boundaries & Constraints
-
-**Always:** Clear stale session artifacts on expiry detection. Provide clean redirect without error popups.
-
-**Never:** Allow protected data to remain cached in DOM on session expiry.
-
-</frozen-after-approval>
-
-## Code Map
-
-- `src/auth/session.js` — validates session expiration against TTL
-- `src/auth/RequireAuth.jsx` — catches expired session and redirects
-- `src/pages/Login.jsx` — displays optional expired session flash message
-
-## Tasks & Acceptance
-
-**Execution:**
-- [x] Check TTL on route transitions and page refresh
-- [x] Clear expired session record
-- [x] Redirect to `/login` with clean user messaging
 
 ## Acceptance Criteria
 
@@ -54,4 +29,4 @@ context:
 
 ## Spec Change Log
 
-- 2026-09-16: Story 2.3 implemented and verified
+- 2026-10-26: Story 2.3 imported from JIRA board ticket FLEETS-13 (Status: In Review).
