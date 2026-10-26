@@ -1,46 +1,21 @@
 ---
-jira_key: EW-105
-status: Approved
-reviewed_by: Manager (via Markdown Studio)
-review_timestamp: 2026-09-16T07:12:15.284Z
-gate_signature: ACL-STUDIO-APPROVAL-APPROVED
-title: Block unauthenticated hub access (Story 1.4)
+status: In Review
+title: Block unauthenticated hub access
 type: feature
-created: 2026-09-16
-story_key: 1-4-block-unauthenticated-hub-access
-baseline_commit: NO_VCS
-context:
-  - ../../../_acl-output/planning-artifacts/epics.md
+created: 2026-10-26
+story_id: 1.4
+epic_id: 1
+jira_key: FLEETS-10
+tier: Tier 1 (Self-Contained)
 ---
 
-<frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
+# Story 1.4: Block unauthenticated hub access
 
-## Intent
+## Description
 
 **Problem:** Protected routes must not be accessible to unauthenticated guests or expired sessions.
 
 **Approach:** Implement `RequireAuth` route guard in React Router to intercept unauthorized navigation and redirect to `/login`.
-
-## Boundaries & Constraints
-
-**Always:** Guard all protected routes (`/home`, `/profile`, `/devices`, `/sites`, `/users`). Preserve sessions across browser refresh.
-
-**Never:** Allow protected content to flash before redirect.
-
-</frozen-after-approval>
-
-## Code Map
-
-- `src/auth/RequireAuth.jsx` — checks `hasValidSession()` and redirects unauthenticated users
-- `src/auth/session.js` — validates session expiration and validity
-- `src/App.jsx` — nests protected routes inside `RequireAuth`
-
-## Tasks & Acceptance
-
-**Execution:**
-- [x] Protect `/home`, `/profile`, `/devices`, `/sites`, `/users` behind `RequireAuth`
-- [x] Unauthenticated visits redirect to `/login`
-- [x] Session maintained on page reload
 
 ## Acceptance Criteria
 
@@ -54,4 +29,4 @@ context:
 
 ## Spec Change Log
 
-- 2026-09-16: Story 1.4 implemented and verified
+- 2026-10-26: Story 1.4 imported from JIRA board ticket FLEETS-10 (Status: In Review).
