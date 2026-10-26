@@ -1,46 +1,21 @@
 ---
-jira_key: EW-106
-status: Approved
-reviewed_by: Manager (via Markdown Studio)
-review_timestamp: 2026-09-16T07:12:15.284Z
-gate_signature: ACL-STUDIO-APPROVAL-APPROVED
-title: Landing hero and hub layout (Story 2.1)
+status: In Review
+title: Landing hero and hub layout
 type: feature
-created: 2026-09-16
-story_key: 2-1-landing-hero-and-hub-layout
-baseline_commit: NO_VCS
-context:
-  - ../../../_acl-output/planning-artifacts/epics.md
+created: 2026-10-26
+story_id: 2.1
+epic_id: 2
+jira_key: FLEETS-11
+tier: Tier 1 (Self-Contained)
 ---
 
-<frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
+# Story 2.1: Landing hero and hub layout
 
-## Intent
+## Description
 
 **Problem:** Authenticated operators need a centralized hub after sign-in that introduces the system and presents direct access to operational domains.
 
 **Approach:** Build `/home` Landing hub matching Figma frame `227:3884` with welcome hero and three cards: Devices, Sites, and Users.
-
-## Boundaries & Constraints
-
-**Always:** Use exported 48×48 SVGs for cards (`icon-devices.svg`, `icon-sites.svg`, `icon-users.svg`). Follow typography rules (Inter for welcome, Roboto for body).
-
-**Never:** Use redrawn or placeholder icons that deviate from Figma specifications.
-
-</frozen-after-approval>
-
-## Code Map
-
-- `src/pages/Landing.jsx` — landing view, hero greeting, hub cards
-- `src/pages/Landing.css` — slate band, 3-column grid, responsive card stacking
-- `src/assets/fleet360/` — color logo and domain icons
-
-## Tasks & Acceptance
-
-**Execution:**
-- [x] Render Landing hero with color Fleet 360 logo and welcome copy
-- [x] Display slate hub band with Devices, Sites, and Users cards
-- [x] Cards contain icon, title, description, and pill CTA
 
 ## Acceptance Criteria
 
@@ -55,4 +30,4 @@ context:
 
 ## Spec Change Log
 
-- 2026-09-16: Story 2.1 implemented and verified
+- 2026-10-26: Story 2.1 imported from JIRA board ticket FLEETS-11 (Status: In Review).
