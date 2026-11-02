@@ -1417,6 +1417,48 @@ function gitDetailsRequestInit() {
   return { cache: 'no-store' };
 }
 
+function gitDetailsCacheBustQuery() {
+  return 't=' + encodeURIComponent(String(Date.now()));
+}
+
+/** @deprecated Use gitDetailsCacheBustQuery — do not send stored owner/repo (stale on Vercel). */
+function gitDetailsQueryFromStoredConfig() {
+  return gitDetailsCacheBustQuery();
+}
+
+async function fetchGitDetailsPayload() {
+  const res = await fetch('/api/git-details?' + gitDetailsCacheBustQuery(), gitDetailsRequestInit());
+  if (!res.ok) return null;
+  const text = await res.text();
+  if (!text || text.trim().startsWith('<')) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function applyGitDetailsToStudio(data) {
+  if (!data || typeof data !== 'object') {
+    window.__ACL_GIT_CONNECTED__ = false;
+    updateNavUserControlCentre(null);
+    return null;
+  }
+  hydrateGithubRepoFromGitDetails(data);
+  window.__ACL_GIT_CONNECTED__ = Boolean(data.repoConnected === true && !data.repoDeleted);
+  window.__ACL_GITHUB_DETAILS__ = data;
+  updateNavUserControlCentre(data);
+  try {
+    window.dispatchEvent(new CustomEvent('acl:github-details-updated', { detail: data }));
+  } catch (e) {}
+  return data;
+}
+
+window.refreshGitHubUserControl = async function refreshGitHubUserControl() {
+  const data = await fetchGitDetailsPayload();
+  return applyGitDetailsToStudio(data);
+};
+
 function readGithubRepoConfig() {
   try {
     return {
@@ -1442,11 +1484,10 @@ function writeGithubRepoConfig(cfg) {
 
 function hydrateGithubRepoFromGitDetails(data) {
   if (!data) return;
-  const cur = readGithubRepoConfig();
-  const next = { ...cur };
-  if (data.githubOwner && !next.owner) next.owner = data.githubOwner;
-  if (data.githubRepo && !next.repo) next.repo = data.githubRepo;
-  if (data.githubBranch && (!next.branch || next.branch === 'main')) next.branch = data.githubBranch;
+  const next = readGithubRepoConfig();
+  if (data.githubOwner) next.owner = data.githubOwner;
+  if (data.githubRepo) next.repo = data.githubRepo;
+  if (data.githubBranch) next.branch = data.githubBranch;
   if (!next.owner || !next.repo) {
     const origin = data.remoteOrigin || '';
     const m = origin.match(/github\.com[/:]([^/]+)\/([^/.]+)/i);
@@ -1505,25 +1546,13 @@ async function renderGitDashboard() {
   `;
 
   try {
-    let data = null;
-    try {
-      const res = await fetch('/api/git-details?t=' + Date.now(), gitDetailsRequestInit());
-      if (res.ok) {
-        data = await res.json();
-      }
-    } catch (e) {
-      data = null;
-    }
+    let data = await fetchGitDetailsPayload();
     if (!data) {
       data = { isPushed: false, repoConnected: false, userDetails: {}, projectDetails: {}, gitDetails: {} };
     }
-    hydrateGithubRepoFromGitDetails(data);
+    applyGitDetailsToStudio(data);
     const isConnected = Boolean(data && data.repoConnected === true && !data.repoDeleted);
-    window.__ACL_GIT_CONNECTED__ = isConnected;
     const isPushed = Boolean(data && data.isPushed);
-
-    // Update navbar identity
-    updateNavUserControlCentre(data);
 
     const user = data.userDetails || {};
     const project = data.projectDetails || {};
@@ -1556,8 +1585,10 @@ async function renderGitDashboard() {
             <div>
               <strong style="font-size: 0.95rem;">🟢 Connected to GitHub</strong> &nbsp;—&nbsp;
               <span>Remote: <code style="font-size: 0.82rem; background: #dcfce7; padding: 2px 6px; border-radius: 4px;">${data.remoteOrigin || 'origin'}</code></span>
+              ${data.githubBranch ? `<span style="margin-left: 0.5rem;">Branch: <code style="font-size: 0.82rem; background: #dcfce7; padding: 2px 6px; border-radius: 4px;">${data.githubBranch}</code></span>` : ''}
               <div style="font-size: 0.82rem; margin-top: 0.25rem; color: #15803d;">
                 ${isPushed ? 'All commits pushed and in sync with GitHub.' : 'Repository linked. Local commits pending push to remote.'}
+                ${data.fetchedAt ? `<span style="display:block;margin-top:0.2rem;color:#166534;">Last refreshed: ${new Date(data.fetchedAt).toLocaleString()}</span>` : ''}
               </div>
             </div>
             <button type="button" class="git-toggle-btn" onclick="renderGitDashboard()" style="padding: 0.35rem 0.85rem; font-size: 0.82rem; cursor: pointer; border-radius: 4px; border: 1px solid #86efac; background: #fff; color: #166534;">
@@ -1594,10 +1625,21 @@ async function renderGitDashboard() {
 
     const linkedReposHtml = hasLinkedRepos
       ? project.linkedRepositories
-          .map(
-            (r) =>
-              `<div style="margin-bottom: 0.25rem;"><a href="${r}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: underline; font-family: monospace; font-size: 0.86rem;">${r}</a></div>`,
-          )
+          .map((r) => {
+            const raw = String(r || '').trim();
+            let href = raw;
+            if (!/^https?:\/\//i.test(href)) {
+              if (data.githubOwner && data.githubRepo) {
+                href = `https://github.com/${data.githubOwner}/${data.githubRepo}`;
+              } else if (data.remoteOrigin) {
+                href = String(data.remoteOrigin).replace(/\.git$/i, '');
+              } else {
+                href = `https://github.com/${raw}`;
+              }
+            }
+            const label = href.replace(/^https:\/\//i, '');
+            return `<div style="margin-bottom: 0.25rem;"><a href="${href}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: underline; font-family: monospace; font-size: 0.86rem;">${label}</a></div>`;
+          })
           .join('')
       : '<span class="empty">—</span>';
 
@@ -1763,12 +1805,9 @@ async function renderGitDashboard() {
   }
 }
 
-// Auto-check GitHub link on page load to update navbar
+// Auto-check GitHub link on page load to update navbar + linked repo cache
 if (typeof window !== 'undefined') {
-  fetch('/api/git-details', gitDetailsRequestInit())
-    .then((r) => r.json())
-    .then((d) => updateNavUserControlCentre(d))
-    .catch(() => updateNavUserControlCentre(null));
+  refreshGitHubUserControl().catch(() => updateNavUserControlCentre(null));
 }
 
 // Safe JSON Fetch Helper (Resilient against HTML error pages or empty response bodies)
@@ -1779,6 +1818,14 @@ function readAtlassianClientConfig() {
   } catch {
     return {};
   }
+}
+
+function normalizeAtlassianDomainClient(domain) {
+  let d = String(domain || '').trim();
+  if (!d) return '';
+  if (!/^https?:\/\//i.test(d)) d = `https://${d}`;
+  d = d.replace(/\/+$/, '').replace(/\/wiki$/i, '');
+  return d.replace(/\/+$/, '');
 }
 
 function writeAtlassianClientConfig(config) {
@@ -1795,39 +1842,45 @@ function isAtlassianConfigUsable(cfg) {
 }
 
 function isAtlassianConfigConnected(cfg) {
+  if (!cfg || typeof cfg !== 'object') return false;
+  if (cfg.isDemoMode) return true;
   if (!isAtlassianConfigUsable(cfg)) return false;
-  return Boolean(cfg.connected !== false);
+  return cfg.connected === true;
 }
 
-/** Serverless GET /api/atlassian-config is often empty; browser localStorage is the source of truth. */
+/** Serverless GET /api/atlassian-config is often empty; browser localStorage holds credentials. */
 function mergeAtlassianConfig(serverCfg, localCfg) {
   const server = serverCfg && typeof serverCfg === 'object' ? serverCfg : {};
   const local = localCfg && typeof localCfg === 'object' ? localCfg : {};
-  const serverUsable = isAtlassianConfigUsable(server) && isAtlassianConfigConnected(server);
-  const localUsable = isAtlassianConfigUsable(local);
+  const merged = {
+    ...server,
+    ...local,
+    apiToken: local.apiToken || server.apiToken || '',
+    jiraProjectKey: local.jiraProjectKey || server.jiraProjectKey || '',
+    confluenceSpaceKey: local.confluenceSpaceKey || server.confluenceSpaceKey || '',
+  };
 
-  if (localUsable && !serverUsable) {
-    return {
-      ...server,
-      ...local,
-      connected: true,
-      apiToken: local.apiToken || server.apiToken || '',
-    };
+  if (local.connected === false) {
+    merged.connected = false;
+    merged.lastError = local.lastError || server.lastError || merged.lastError;
+    return merged;
   }
-  if (localUsable && serverUsable) {
-    return {
-      ...server,
-      ...local,
-      connected: true,
-      apiToken: local.apiToken || server.apiToken || '',
-      jiraProjectKey: local.jiraProjectKey || server.jiraProjectKey || '',
-      confluenceSpaceKey: local.confluenceSpaceKey || server.confluenceSpaceKey || '',
-    };
+  if (server.connected === false) {
+    merged.connected = false;
+    merged.lastError = server.lastError || local.lastError || merged.lastError;
+    return merged;
   }
-  if (serverUsable) {
-    return { ...local, ...server, connected: true };
+  if (server.connected === true) {
+    merged.connected = true;
+    merged.lastError = null;
+    return merged;
   }
-  return { ...server, ...local };
+  if (local.connected === true) {
+    merged.connected = true;
+    return merged;
+  }
+  merged.connected = false;
+  return merged;
 }
 
 function readAtlassianClientMapping() {
@@ -1968,6 +2021,9 @@ async function atlassianApiPayloadAsync(extra = {}) {
     } catch (e) {}
   }
   const stored = readAtlassianClientConfig();
+  if (stored.domain) {
+    stored.domain = normalizeAtlassianDomainClient(stored.domain);
+  }
   const workspaceFiles = await ensureAtlassianWorkspaceFiles();
   if (typeof window.persistFilesToBrowserSession === 'function') {
     window.persistFilesToBrowserSession();
@@ -2163,11 +2219,7 @@ async function renderAtlassianSuite(isPushed) {
     ]);
 
     const serverCfg = cfgResRaw.ok && cfgResRaw.data ? cfgResRaw.data : {};
-    let cfgRes = mergeAtlassianConfig(serverCfg, readAtlassianClientConfig());
-    if (isAtlassianConfigUsable(cfgRes)) {
-      cfgRes.connected = true;
-      writeAtlassianClientConfig(cfgRes);
-    }
+    const cfgRes = mergeAtlassianConfig(serverCfg, readAtlassianClientConfig());
     const discRes = discResRaw.ok ? discResRaw.data : { epics: [], stories: [], deliverables: [] };
     const histRes = mergeAtlassianHistory(
       histResRaw.ok && Array.isArray(histResRaw.data) ? histResRaw.data : [],
@@ -2186,7 +2238,9 @@ async function renderAtlassianSuite(isPushed) {
     } else if (isDemo) {
       statusBadgeHtml = `<span class="atlassian-status-badge demo">🟡 Interactive Sandbox Mode</span>`;
     } else {
-      statusBadgeHtml = `<span class="atlassian-status-badge standby">⚪ Not Configured</span>`;
+      statusBadgeHtml = `<span class="atlassian-status-badge standby">⚪ Not Connected${
+        cfgRes.lastError ? ' — verification failed' : ''
+      }</span>`;
     }
 
     mount.innerHTML = `
@@ -2216,7 +2270,7 @@ async function renderAtlassianSuite(isPushed) {
             <div class="atlassian-config-grid">
               <div class="atlassian-input-group">
                 <label>Atlassian Domain URL</label>
-                <input type="text" id="atlDomain" name="domain" value="${cfgRes.domain || ''}" placeholder="https://your-domain.atlassian.net" required />
+                <input type="text" id="atlDomain" name="domain" value="${cfgRes.domain || ''}" placeholder="https://your-domain.atlassian.net (no /wiki)" required />
               </div>
               <div class="atlassian-input-group">
                 <label>Atlassian Account Email</label>
@@ -2414,7 +2468,7 @@ window.saveAtlassianConfig = async function (e) {
   }
 
   const payload = {
-    domain: domain || '',
+    domain: normalizeAtlassianDomainClient(domain) || domain || '',
     email: email || '',
     apiToken: apiToken || '',
     jiraProjectKey: jiraProjectKey || '',
@@ -2459,19 +2513,17 @@ window.saveAtlassianConfig = async function (e) {
         errMsg =
           'API route not found (HTTP 404). On Vercel, confirm Root Directory is the repo root (not dist/), redeploy, and check Deployment → Serverless Functions lists /api/atlassian-config.';
       }
-      if (res.status === 400 || (res.data && res.data.error)) {
-        writeAtlassianClientConfig({ ...payload, connected: false, lastError: errMsg });
-      }
+      writeAtlassianClientConfig({
+        ...payload,
+        connected: false,
+        lastError: errMsg,
+      });
       alert('⚠️ Error saving configuration: ' + errMsg);
       renderAtlassianSuite(true);
     }
   } catch (err) {
-    if (isAtlassianConfigUsable(payload)) {
-      writeAtlassianClientConfig({ ...payload, connected: true, clientPersisted: true });
-      alert('✅ Credentials saved in this browser (offline). They will be used on the next sync.');
-    } else {
-      alert('⚠️ Failed to save Atlassian configuration: ' + err.message);
-    }
+    writeAtlassianClientConfig({ ...payload, connected: false, lastError: err.message });
+    alert('⚠️ Failed to save Atlassian configuration: ' + err.message);
     renderAtlassianSuite(true);
   } finally {
     if (saveBtn) {

@@ -71,6 +71,26 @@ function safeWriteAclJson(projectRoot, filename, data) {
   }
 }
 
+/** Site base URL only — never include a trailing /wiki (Confluence REST adds /wiki/...). */
+export function normalizeAtlassianDomain(domain) {
+  let d = String(domain || '').trim();
+  if (!d) return '';
+  if (!d.startsWith('http://') && !d.startsWith('https://')) {
+    d = `https://${d}`;
+  }
+  d = d.replace(/\/+$/, '');
+  d = d.replace(/\/wiki$/i, '');
+  return d.replace(/\/+$/, '');
+}
+
+function wrapMarkdownForConfluenceCdata(markdown) {
+  const body = String(markdown || '');
+  return body.replace(/\]\]>/g, ']]]]><![CDATA[>');
+}
+
+function canWriteDeliverableFrontmatter(useWorkspace) {
+  return !useWorkspace && !isServerlessRuntime();
+}
 
 export function getAtlassianConfig(projectRoot) {
   const configPath = getAclFilePath(projectRoot, 'atlassian-config.json', false);
@@ -119,14 +139,10 @@ export async function validateAtlassianConfig(config) {
   if (Boolean(config.isDemoMode)) {
     return { valid: true, message: 'Sandbox Simulation Mode active' };
   }
-  let domain = (config.domain || '').trim();
+  const domain = normalizeAtlassianDomain(config.domain);
   if (!domain) {
     return { valid: false, error: 'Atlassian Domain is required' };
   }
-  if (!domain.startsWith('http://') && !domain.startsWith('https://')) {
-    domain = 'https://' + domain;
-  }
-  domain = domain.replace(/\/+$/, '');
   const email = (config.email || '').trim();
   const token = (config.apiToken || '').trim();
   const jiraKey = (config.jiraProjectKey || '').trim().toUpperCase();
@@ -272,6 +288,7 @@ export async function saveAtlassianConfig(projectRoot, config) {
 
   const payloadToSave = {
     ...config,
+    domain: normalizeAtlassianDomain(config.domain),
     connected: true,
     lastError: null,
   };
@@ -1928,6 +1945,7 @@ export async function syncToConfluence(projectRoot, customConfig = {}, req = nul
   const split = splitAtlassianPayload(customConfig);
   const { workspaceFiles, configFields, useWorkspace } = await resolveWorkspace(projectRoot, customConfig, req);
   const config = { ...getAtlassianConfig(projectRoot), ...configFields };
+  if (config.domain) config.domain = normalizeAtlassianDomain(config.domain);
   const mapping = mergeClientMapping(projectRoot, split.clientMapping);
   const rawDeliverables = useWorkspace
     ? discoverDeliverablesFromWorkspace(workspaceFiles, mapping)
@@ -1936,7 +1954,7 @@ export async function syncToConfluence(projectRoot, customConfig = {}, req = nul
   if (!mapping.confluence) mapping.confluence = {};
 
   const isLive = Boolean(config.domain && config.email && config.apiToken && !config.isDemoMode);
-  const domain = (config.domain || '').replace(/\/+$/, '');
+  const domain = normalizeAtlassianDomain(config.domain);
   const spaceKey = (config.confluenceSpaceKey || 'DOCS').toUpperCase();
 
   if (isLive && (!config.domain || !config.email || !config.apiToken)) {
@@ -1980,7 +1998,7 @@ export async function syncToConfluence(projectRoot, customConfig = {}, req = nul
       `<hr/>` +
       `<ac:structured-macro ac:name="code" ac:schema-version="1">` +
       `<ac:parameter ac:name="language">markdown</ac:parameter>` +
-      `<ac:plain-text-body><![CDATA[${doc.content}]]></ac:plain-text-body>` +
+      `<ac:plain-text-body><![CDATA[${wrapMarkdownForConfluenceCdata(doc.content)}]]></ac:plain-text-body>` +
       `</ac:structured-macro>` +
       `<hr/>` +
       `<p><em>Automatically synchronized from VelocityONE Markdown Studio • ${new Date().toISOString()}</em></p>`;
@@ -2039,7 +2057,9 @@ export async function syncToConfluence(projectRoot, customConfig = {}, req = nul
 
           if (updateRes.ok) {
             mapping.confluence[doc.filename] = existing.id;
-            updateFileFrontmatter(doc.fullPath, { confluencePageId: existing.id });
+            if (canWriteDeliverableFrontmatter(useWorkspace)) {
+              updateFileFrontmatter(doc.fullPath, { confluencePageId: existing.id });
+            }
             syncResults.updatedCount++;
             syncResults.pages.push({
               title: targetTitle,
@@ -2086,7 +2106,9 @@ export async function syncToConfluence(projectRoot, customConfig = {}, req = nul
           if (createRes.ok) {
             const created = await createRes.json();
             mapping.confluence[doc.filename] = created.id;
-            updateFileFrontmatter(doc.fullPath, { confluencePageId: created.id });
+            if (canWriteDeliverableFrontmatter(useWorkspace)) {
+              updateFileFrontmatter(doc.fullPath, { confluencePageId: created.id });
+            }
             syncResults.createdCount++;
             syncResults.pages.push({
               title: pageTitle,
@@ -2147,9 +2169,24 @@ export async function syncToConfluence(projectRoot, customConfig = {}, req = nul
     summary: `Synced ${syncResults.totalPages} deliverables to Confluence space ${spaceKey} (${syncResults.updatedCount} updated in-place, ${syncResults.createdCount} created) without duplicates.`,
   });
 
-  persistAtlassianSession(projectRoot, { ...config, connected: true });
+  persistAtlassianSession(projectRoot, { ...config, domain, connected: true });
 
-  return { ...syncResults, mapping };
+  const failedPages = syncResults.pages.filter(
+    (p) => p.status && (String(p.status).startsWith('Failed') || String(p.status).startsWith('Error')),
+  );
+  if (isLive && deliverables.length > 0 && syncResults.updatedCount === 0 && syncResults.createdCount === 0) {
+    const firstFail = failedPages[0]?.status || syncResults.pages[0]?.status || 'unknown';
+    return {
+      success: false,
+      error:
+        `Confluence rejected all ${deliverables.length} page(s) in space ${spaceKey}. ` +
+        `Use domain https://your-site.atlassian.net (no /wiki). First result: ${firstFail}`,
+      ...syncResults,
+      mapping,
+    };
+  }
+
+  return { success: true, ...syncResults, mapping };
 }
 
 /**
@@ -2163,6 +2200,7 @@ export async function pullFromConfluence(projectRoot, customConfig = {}, req = n
   const split = splitAtlassianPayload(customConfig);
   const { workspaceFiles, configFields, useWorkspace } = await resolveWorkspace(projectRoot, customConfig, req);
   const config = { ...getAtlassianConfig(projectRoot), ...configFields };
+  if (config.domain) config.domain = normalizeAtlassianDomain(config.domain);
   const mapping = mergeClientMapping(projectRoot, split.clientMapping);
   if (!mapping.confluence) mapping.confluence = {};
   const localDeliverables = filterConfluencePhaseDeliverables(
@@ -2170,7 +2208,7 @@ export async function pullFromConfluence(projectRoot, customConfig = {}, req = n
   );
 
   const isLive = Boolean(config.domain && config.email && config.apiToken && !config.isDemoMode);
-  const domain = (config.domain || '').replace(/\/+$/, '');
+  const domain = normalizeAtlassianDomain(config.domain);
   const spaceKey = (config.confluenceSpaceKey || 'DOCS').toUpperCase();
 
   if (isLive && (!config.domain || !config.email || !config.apiToken)) {
@@ -2197,24 +2235,31 @@ export async function pullFromConfluence(projectRoot, customConfig = {}, req = n
   let confluencePages = [];
   if (isLive) {
     try {
-      const res = await fetch(
-        `${domain}/wiki/rest/api/content?spaceKey=${encodeURIComponent(spaceKey)}&expand=body.storage,version,history&limit=50`,
-        {
+      const pageLimit = 50;
+      let start = 0;
+      for (;;) {
+        const listUrl =
+          `${domain}/wiki/rest/api/content?spaceKey=${encodeURIComponent(spaceKey)}` +
+          `&expand=body.storage,version,history&limit=${pageLimit}&start=${start}`;
+        const res = await fetch(listUrl, {
           headers: {
             Authorization: `Basic ${auth}`,
             Accept: 'application/json',
           },
           signal: AbortSignal.timeout(45_000),
-        },
-      );
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        confluencePages = data.results || [];
-      } else {
-        const msg =
-          (Array.isArray(data.message) ? data.message.join('; ') : data.message) ||
-          `Confluence list failed (HTTP ${res.status})`;
-        return { success: false, error: msg };
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const msg =
+            (Array.isArray(data.message) ? data.message.join('; ') : data.message) ||
+            `Confluence list failed (HTTP ${res.status})`;
+          return { success: false, error: msg };
+        }
+        const batch = data.results || [];
+        confluencePages.push(...batch);
+        if (batch.length < pageLimit) break;
+        start += batch.length;
+        if (start > 500) break;
       }
       if (confluencePages.length === 0) {
         return {

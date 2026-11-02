@@ -641,20 +641,24 @@ function getLinkedGitHubRepo() {
 }
 
 async function ensureLinkedGitHubRepo() {
+  if (typeof window.refreshGitHubUserControl === 'function') {
+    await window.refreshGitHubUserControl();
+    return;
+  }
   let { owner, repo, branch } = getLinkedGitHubRepo();
   try {
     const res = await fetch('/api/git-details?t=' + Date.now(), { cache: 'no-store' });
     if (!res.ok) return;
     const data = await res.json();
-    if (data.githubOwner && !owner) {
+    if (data.githubOwner) {
       owner = data.githubOwner;
       localStorage.setItem('acl_github_owner', owner);
     }
-    if (data.githubRepo && !repo) {
+    if (data.githubRepo) {
       repo = data.githubRepo;
       localStorage.setItem('acl_github_repo', repo);
     }
-    if (data.githubBranch && !branch) {
+    if (data.githubBranch) {
       branch = data.githubBranch;
       localStorage.setItem('acl_github_branch', branch);
     }

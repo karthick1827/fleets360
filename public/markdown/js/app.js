@@ -23,12 +23,25 @@ async function init() {
   } catch (e) {}
   updateDrawerFrameworkVersion();
   updateWorkflowModeUI();
-  fetch('/api/git-details?t=' + Date.now(), typeof gitDetailsRequestInit === 'function' ? gitDetailsRequestInit() : {})
-    .then((r) => r.json())
+  const gitDetailsUrl = '/api/git-details?' + (typeof gitDetailsCacheBustQuery === 'function' ? gitDetailsCacheBustQuery() : 't=' + Date.now());
+  fetch(gitDetailsUrl, typeof gitDetailsRequestInit === 'function' ? gitDetailsRequestInit() : {})
+    .then(async (r) => {
+      if (!r.ok) return null;
+      const text = await r.text();
+      try {
+        return JSON.parse(text);
+      } catch {
+        return null;
+      }
+    })
     .then((d) => {
-      if (typeof hydrateGithubRepoFromGitDetails === 'function') hydrateGithubRepoFromGitDetails(d);
-      window.__ACL_GIT_CONNECTED__ = Boolean(d && d.repoConnected === true && !d.repoDeleted);
-      if (typeof updateNavUserControlCentre === 'function') updateNavUserControlCentre(d);
+      if (typeof applyGitDetailsToStudio === 'function') {
+        applyGitDetailsToStudio(d);
+      } else {
+        if (typeof hydrateGithubRepoFromGitDetails === 'function') hydrateGithubRepoFromGitDetails(d);
+        window.__ACL_GIT_CONNECTED__ = Boolean(d && d.repoConnected === true && !d.repoDeleted);
+        if (typeof updateNavUserControlCentre === 'function') updateNavUserControlCentre(d);
+      }
       if (!window.__ACL_GIT_CONNECTED__) {
         setSyncStatus('Link this Vercel project to GitHub for automatic live sync', 'yellow');
       }
