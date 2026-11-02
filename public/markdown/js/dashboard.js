@@ -1823,16 +1823,14 @@ function readAtlassianClientConfig() {
   }
 }
 
-/** Legacy configs had connected:true without verification — treat as not connected until Save & Connect succeeds. */
+/** Legacy configs: connected only after successful Save & Connect (verifiedAt). */
 function normalizeAtlassianClientConfig(cfg) {
   if (!cfg || typeof cfg !== 'object') return {};
   const out = { ...cfg };
-  if (out.isDemoMode) {
-    out.connected = out.connected !== false;
-    return out;
-  }
+  delete out.isDemoMode;
   if (!out.verifiedAt || out.connected !== true) {
     out.connected = false;
+    out.verifiedAt = null;
   }
   return out;
 }
@@ -1848,52 +1846,36 @@ function normalizeAtlassianDomainClient(domain) {
 function writeAtlassianClientConfig(config) {
   if (!config || typeof config !== 'object') return;
   try {
-    localStorage.setItem('__acl_atlassian_config__', JSON.stringify(config));
+    localStorage.setItem('__acl_atlassian_config__', JSON.stringify(normalizeAtlassianClientConfig(config)));
   } catch (e) {}
 }
 
 function isAtlassianConfigUsable(cfg) {
   if (!cfg || typeof cfg !== 'object') return false;
-  if (cfg.isDemoMode) return true;
   return Boolean((cfg.domain || '').trim() && (cfg.email || '').trim() && (cfg.apiToken || '').trim());
 }
 
 function isAtlassianConfigConnected(cfg) {
   if (!cfg || typeof cfg !== 'object') return false;
-  if (cfg.isDemoMode) return cfg.connected === true;
   if (!isAtlassianConfigUsable(cfg)) return false;
   return cfg.connected === true && Boolean(cfg.verifiedAt);
 }
 
-/** Browser localStorage owns connection state; server GET must not re-mark failed credentials as connected. */
-function mergeAtlassianConfig(serverCfg, localCfg) {
+/** UI config: connection flags come only from browser localStorage (never server GET alone). */
+function buildAtlassianUiConfig(serverCfg) {
+  const local = readAtlassianClientConfig();
   const server = serverCfg && typeof serverCfg === 'object' ? serverCfg : {};
-  const local = normalizeAtlassianClientConfig(localCfg && typeof localCfg === 'object' ? localCfg : {});
-  const merged = {
+  return {
     ...server,
-    ...local,
-    apiToken: local.apiToken || server.apiToken || '',
+    domain: local.domain || server.domain || '',
+    email: local.email || server.email || '',
+    apiToken: local.apiToken || '',
     jiraProjectKey: local.jiraProjectKey || server.jiraProjectKey || '',
     confluenceSpaceKey: local.confluenceSpaceKey || server.confluenceSpaceKey || '',
+    connected: local.connected,
     verifiedAt: local.verifiedAt || null,
+    lastError: local.lastError || server.lastError || '',
   };
-
-  if (local.isDemoMode) {
-    merged.connected = local.connected === true;
-    merged.isDemoMode = true;
-    return merged;
-  }
-
-  if (local.connected === true && local.verifiedAt) {
-    merged.connected = true;
-    merged.lastError = null;
-    return merged;
-  }
-
-  merged.connected = false;
-  merged.verifiedAt = null;
-  merged.lastError = local.lastError || server.lastError || merged.lastError || '';
-  return merged;
 }
 
 function readAtlassianClientMapping() {
@@ -2232,7 +2214,7 @@ async function renderAtlassianSuite(isPushed) {
     ]);
 
     const serverCfg = cfgResRaw.ok && cfgResRaw.data ? cfgResRaw.data : {};
-    const cfgRes = mergeAtlassianConfig(serverCfg, readAtlassianClientConfig());
+    const cfgRes = buildAtlassianUiConfig(serverCfg);
     const discRes = discResRaw.ok ? discResRaw.data : { epics: [], stories: [], deliverables: [] };
     const histRes = mergeAtlassianHistory(
       histResRaw.ok && Array.isArray(histResRaw.data) ? histResRaw.data : [],
@@ -2243,13 +2225,10 @@ async function renderAtlassianSuite(isPushed) {
     const storiesCount = discRes.storyCount || (discRes.stories || []).length;
     const deliverablesCount = discRes.deliverableCount || (discRes.deliverables || []).length;
     const isConnected = isAtlassianConfigConnected(cfgRes);
-    const isDemo = Boolean(cfgRes.isDemoMode);
 
     let statusBadgeHtml = '';
-    if (isConnected && !isDemo) {
+    if (isConnected) {
       statusBadgeHtml = `<span class="atlassian-status-badge connected">🟢 Connected: ${cfgRes.domain || 'Cloud'}</span>`;
-    } else if (isDemo && cfgRes.connected === true) {
-      statusBadgeHtml = `<span class="atlassian-status-badge demo">🟡 Interactive Sandbox Mode</span>`;
     } else {
       statusBadgeHtml = `<span class="atlassian-status-badge standby">⚪ Not Connected${
         cfgRes.lastError ? ' — verification failed' : ''
@@ -2278,6 +2257,11 @@ async function renderAtlassianSuite(isPushed) {
             <strong style="color: #0f172a; font-size: 0.95rem;">Atlassian Cloud Credentials & Workspace Keys</strong>
             <span style="font-size: 0.78rem; color: #64748b;">Credentials saved in this browser; on Vercel, the server only verifies (no repo write).</span>
           </div>
+          ${
+            cfgRes.lastError
+              ? `<div role="alert" style="margin: 0.75rem 0 0; padding: 0.65rem 0.85rem; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; color: #991b1b; font-size: 0.82rem;"><strong>Verification failed:</strong> ${String(cfgRes.lastError).replace(/</g, '&lt;')}</div>`
+              : ''
+          }
 
           <form id="atlassianConfigForm" onsubmit="saveAtlassianConfig(event); return false;">
             <div class="atlassian-config-grid">
@@ -2307,12 +2291,8 @@ async function renderAtlassianSuite(isPushed) {
             </div>
 
             <div class="atlassian-config-actions">
-              <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; color: #475569;">
-                <input type="checkbox" id="atlDemoMode" name="isDemoMode" ${isDemo ? 'checked' : ''} style="cursor: pointer;" />
-                <label for="atlDemoMode" style="cursor: pointer; font-size: 0.82rem; text-transform: none; color: #475569;">Use Sandbox Simulation Mode (generates live-preview keys without requiring active API token)</label>
-              </div>
-              <div style="display: flex; gap: 0.5rem;">
-                ${isConnected || isDemo ? '<button type="button" class="atlassian-toggle-btn" onclick="disconnectAtlassian()" style="color: #ef4444; border-color: #fca5a5;">Disconnect</button>' : ''}
+              <div style="display: flex; gap: 0.5rem; margin-left: auto;">
+                ${isConnected ? '<button type="button" class="atlassian-toggle-btn" onclick="disconnectAtlassian()" style="color: #ef4444; border-color: #fca5a5;">Disconnect</button>' : ''}
                 <button type="button" class="atlassian-toggle-btn" onclick="toggleAtlassianConfigPanel()">Cancel</button>
                 <button type="button" class="atlassian-btn-sync jira" onclick="saveAtlassianConfig(event)" style="width: auto; padding: 0.45rem 1rem;">Save & Connect</button>
               </div>
@@ -2333,8 +2313,8 @@ async function renderAtlassianSuite(isPushed) {
                   <span>Sprint & Issue Management</span>
                 </div>
               </div>
-              <span class="atlassian-status-badge ${isConnected ? 'connected' : isDemo ? 'demo' : 'standby'}">
-                ${isConnected ? 'Ready to Sync' : isDemo ? 'Sandbox Ready' : '⚪ Not Configured'}
+              <span class="atlassian-status-badge ${isConnected ? 'connected' : 'standby'}">
+                ${isConnected ? 'Ready to Sync' : '⚪ Not Configured'}
               </span>
             </div>
 
@@ -2365,8 +2345,8 @@ async function renderAtlassianSuite(isPushed) {
                   <span>Living Product & Architecture Pages</span>
                 </div>
               </div>
-              <span class="atlassian-status-badge ${isConnected ? 'connected' : isDemo ? 'demo' : 'standby'}">
-                ${isConnected ? 'Ready to Sync' : isDemo ? 'Sandbox Ready' : '⚪ Not Configured'}
+              <span class="atlassian-status-badge ${isConnected ? 'connected' : 'standby'}">
+                ${isConnected ? 'Ready to Sync' : '⚪ Not Configured'}
               </span>
             </div>
 
@@ -2446,7 +2426,6 @@ window.disconnectAtlassian = async function () {
       apiToken: '',
       jiraProjectKey: '',
       confluenceSpaceKey: '',
-      isDemoMode: false,
       connected: false,
     };
     await safeFetchJson('/api/atlassian-config', {
@@ -2471,11 +2450,10 @@ window.saveAtlassianConfig = async function (e) {
   const apiToken = document.getElementById('atlToken')?.value?.trim();
   const jiraProjectKey = document.getElementById('atlJiraKey')?.value?.trim()?.toUpperCase();
   const confluenceSpaceKey = document.getElementById('atlConfSpace')?.value?.trim()?.toUpperCase();
-  const isDemoMode = Boolean(document.getElementById('atlDemoMode')?.checked);
 
-  if (!isDemoMode && (!domain || !email || !apiToken || !jiraProjectKey || !confluenceSpaceKey)) {
+  if (!domain || !email || !apiToken || !jiraProjectKey || !confluenceSpaceKey) {
     alert(
-      '⚠️ Please fill in all required fields (Domain, Email, API Token, JIRA Key, Confluence Space Key) or enable Sandbox Simulation Mode.',
+      '⚠️ Please fill in all required fields (Domain, Email, API Token, JIRA Key, Confluence Space Key).',
     );
     return;
   }
@@ -2486,7 +2464,6 @@ window.saveAtlassianConfig = async function (e) {
     apiToken: apiToken || '',
     jiraProjectKey: jiraProjectKey || '',
     confluenceSpaceKey: confluenceSpaceKey || '',
-    isDemoMode,
   };
 
   const failLocalConfig = (errMsg) => {
@@ -2512,12 +2489,12 @@ window.saveAtlassianConfig = async function (e) {
       body: JSON.stringify(payload),
     });
 
-    if (res.ok && res.data && res.data.success && res.data.config && res.data.config.connected) {
+    if (res.ok && res.data && res.data.success === true && !res.data.error && res.data.config && res.data.config.connected === true) {
       const saved = {
         ...res.data.config,
         apiToken: res.data.config.apiToken || apiToken || '',
         connected: true,
-        verifiedAt: isDemoMode ? 'demo' : new Date().toISOString(),
+        verifiedAt: new Date().toISOString(),
         lastError: null,
       };
       writeAtlassianClientConfig(saved);
@@ -2553,7 +2530,17 @@ window.saveAtlassianConfig = async function (e) {
   }
 };
 
+function atlassianSyncAllowed() {
+  const cfg = readAtlassianClientConfig();
+  if (isAtlassianConfigConnected(cfg)) return true;
+  alert(
+    '⚠️ Atlassian is not connected. Open Configure Connection, enter valid credentials, then Save & Connect.',
+  );
+  return false;
+}
+
 window.executeJiraSync = async function () {
+  if (!atlassianSyncAllowed()) return;
   if (typeof window.saveCurrentFile === 'function') {
     try {
       await window.saveCurrentFile();
@@ -2606,6 +2593,7 @@ window.executeJiraSync = async function () {
 };
 
 window.executeJiraPull = async function () {
+  if (!atlassianSyncAllowed()) return;
   const btn = document.getElementById('btnPullJira');
   const originalHtml = btn ? btn.innerHTML : '';
   if (btn) {
@@ -2690,6 +2678,7 @@ window.executeJiraPull = async function () {
 };
 
 window.executeConfluenceSync = async function () {
+  if (!atlassianSyncAllowed()) return;
   if (typeof window.saveCurrentFile === 'function') {
     try {
       await window.saveCurrentFile();
@@ -2747,6 +2736,7 @@ window.executeConfluenceSync = async function () {
 };
 
 window.executeConfluencePull = async function () {
+  if (!atlassianSyncAllowed()) return;
   const btn = document.getElementById('btnPullConfluence');
   const originalHtml = btn ? btn.innerHTML : '';
   if (btn) {

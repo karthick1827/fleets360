@@ -106,8 +106,7 @@ export function getAtlassianConfig(projectRoot) {
     try {
       const parsed = JSON.parse(fs.readFileSync(configPath, 'utf8'));
       const hasRealCredentials = Boolean(parsed.domain && parsed.email);
-      const isDemo = Boolean(parsed.isDemoMode);
-      const isConnected = Boolean(parsed.connected && (hasRealCredentials || isDemo));
+      const isConnected = Boolean(parsed.connected && parsed.verifiedAt && hasRealCredentials);
       return {
         domain: parsed.domain || '',
         email: parsed.email || '',
@@ -115,7 +114,6 @@ export function getAtlassianConfig(projectRoot) {
         jiraProjectKey: parsed.jiraProjectKey || defaultProjectKey,
         confluenceSpaceKey: parsed.confluenceSpaceKey || defaultProjectKey,
         connected: isConnected,
-        isDemoMode: isDemo,
         lastSynced: parsed.lastSynced || null,
       };
     } catch {
@@ -130,15 +128,18 @@ export function getAtlassianConfig(projectRoot) {
     jiraProjectKey: defaultProjectKey,
     confluenceSpaceKey: defaultProjectKey,
     connected: false,
-    isDemoMode: false,
     lastSynced: null,
   };
 }
 
+const ATLASSIAN_LIVE_REQUIRED_MSG =
+  'Atlassian live credentials required. Configure connection in User Control and Save & Connect before sync.';
+
+function hasLiveAtlassianCredentials(config) {
+  return Boolean(config?.domain && config?.email && config?.apiToken);
+}
+
 export async function validateAtlassianConfig(config) {
-  if (Boolean(config.isDemoMode)) {
-    return { valid: true, message: 'Sandbox Simulation Mode active' };
-  }
   const domain = normalizeAtlassianDomain(config.domain);
   if (!domain) {
     return { valid: false, error: 'Atlassian Domain is required' };
@@ -239,22 +240,6 @@ export async function validateAtlassianConfig(config) {
 }
 
 export async function saveAtlassianConfig(projectRoot, config) {
-  if (config.isDemoMode) {
-    const demoSaved = {
-      domain: config.domain || '',
-      email: config.email || '',
-      apiToken: '',
-      jiraProjectKey: (config.jiraProjectKey || 'DEMO').toUpperCase(),
-      confluenceSpaceKey: (config.confluenceSpaceKey || 'DEMO').toUpperCase(),
-      isDemoMode: true,
-      connected: true,
-      lastSynced: null,
-      lastError: null,
-    };
-    safeWriteAclJson(projectRoot, 'atlassian-config.json', demoSaved);
-    return demoSaved;
-  }
-
   if (!config.connected && !config.domain && !config.email) {
     const cleared = {
       domain: '',
@@ -262,7 +247,6 @@ export async function saveAtlassianConfig(projectRoot, config) {
       apiToken: '',
       jiraProjectKey: '',
       confluenceSpaceKey: '',
-      isDemoMode: false,
       connected: false,
       lastSynced: null,
     };
@@ -277,6 +261,7 @@ export async function saveAtlassianConfig(projectRoot, config) {
       const disconnectedState = {
         ...config,
         connected: false,
+        verifiedAt: null,
         lastError: validation.error,
       };
       safeWriteAclJson(projectRoot, 'atlassian-config.json', disconnectedState);
@@ -290,6 +275,7 @@ export async function saveAtlassianConfig(projectRoot, config) {
     ...config,
     domain: normalizeAtlassianDomain(config.domain),
     connected: true,
+    verifiedAt: new Date().toISOString(),
     lastError: null,
   };
   safeWriteAclJson(projectRoot, 'atlassian-config.json', payloadToSave);
@@ -847,18 +833,14 @@ export async function syncToJira(projectRoot, customConfig = {}, req = null) {
   const stories = filterJiraStorySpecs(discovered.stories || []);
   const mapping = mergeClientMapping(projectRoot, split.clientMapping);
 
-  const isLive = Boolean(config.domain && config.email && config.apiToken && !config.isDemoMode);
+  const isLive = hasLiveAtlassianCredentials(config);
   const domain = (config.domain || '').replace(/\/+$/, '');
   const projectKey = (config.jiraProjectKey || 'PROJ').toUpperCase();
 
-  if (isLive && (!config.domain || !config.email || !config.apiToken)) {
-    return {
-      success: false,
-      error:
-        'Atlassian credentials were not received by the server. Open Configure Connection, save again, then retry sync.',
-    };
+  if (!isLive) {
+    return { success: false, error: ATLASSIAN_LIVE_REQUIRED_MSG };
   }
-  if (isLive && stories.length === 0) {
+  if (stories.length === 0) {
     return {
       success: false,
       error:
@@ -868,7 +850,7 @@ export async function syncToJira(projectRoot, customConfig = {}, req = null) {
   }
 
   const syncResults = {
-    mode: isLive ? 'live-cloud' : 'simulated-demo',
+    mode: 'live-cloud',
     domain,
     projectKey,
     totalEpics: 0,
@@ -996,23 +978,16 @@ export async function syncToJira(projectRoot, customConfig = {}, req = null) {
           continue;
         }
       } catch (err) {
-        console.warn(`[JIRA Sync] Live Epic call failed, falling back: ${err.message}`);
+        console.warn(`[JIRA Sync] Live Epic call failed: ${err.message}`);
+        syncResults.items.push({
+          type: 'Epic',
+          key: existingKey || itemKey,
+          title: ep.title,
+          status: `Error: ${err.message}`,
+        });
+        continue;
       }
     }
-
-    // Demo/Simulated mode
-    const isUpdate = Boolean(mapping.epics[epicNumStr]);
-    mapping.epics[epicNumStr] = itemKey;
-    if (isUpdate) syncResults.updatedCount++;
-    else syncResults.createdCount++;
-
-    syncResults.items.push({
-      type: 'Epic',
-      key: itemKey,
-      title: ep.title,
-      status: isUpdate ? 'Updated (JIRA Sandbox)' : 'Created (JIRA Sandbox)',
-      url: `${domain}/browse/${itemKey}`,
-    });
   }
   }
 
@@ -1135,25 +1110,18 @@ export async function syncToJira(projectRoot, customConfig = {}, req = null) {
         }
       } catch (err) {
         console.warn(`[JIRA Sync] Live Story call failed: ${err.message}`);
+        syncResults.items.push({
+          type: 'Story',
+          storyId: st.storyId,
+          key: existingKey || itemKey,
+          title: cleanTitle,
+          epicKey: parentEpicKey,
+          criteriaCount: uniqueCriteria.length,
+          status: `Error: ${err.message}`,
+        });
+        continue;
       }
     }
-
-    // Demo/Simulated Story
-    const isUpdate = Boolean(mapping.stories[storyIdStr]);
-    mapping.stories[storyIdStr] = itemKey;
-    if (isUpdate) syncResults.updatedCount++;
-    else syncResults.createdCount++;
-
-    syncResults.items.push({
-      type: 'Story',
-      storyId: st.storyId,
-      key: itemKey,
-      title: cleanTitle,
-      epicKey: parentEpicKey,
-      criteriaCount: uniqueCriteria.length,
-      status: isUpdate ? 'Updated (JIRA Sandbox)' : 'Created (JIRA Sandbox)',
-      url: `${domain}/browse/${itemKey}`,
-    });
   }
 
   // Save persistent mapping to prevent future duplicates
@@ -1193,20 +1161,16 @@ export async function pullFromJira(projectRoot, customConfig = {}, req = null) {
     stories: filterJiraStorySpecs(localDiscovered.stories || []),
   };
 
-  const isLive = Boolean(config.domain && config.email && config.apiToken && !config.isDemoMode);
+  const isLive = hasLiveAtlassianCredentials(config);
   const domain = (config.domain || '').replace(/\/+$/, '');
   const projectKey = (config.jiraProjectKey || 'PROJ').toUpperCase();
 
-  if (isLive && (!config.domain || !config.email || !config.apiToken)) {
-    return {
-      success: false,
-      error:
-        'Atlassian credentials were not received by the server. Open Configure Connection, save again, then retry pull.',
-    };
+  if (!isLive) {
+    return { success: false, error: ATLASSIAN_LIVE_REQUIRED_MSG };
   }
 
   const pullResults = {
-    mode: isLive ? 'live-cloud' : 'simulated-demo',
+    mode: 'live-cloud',
     projectKey,
     totalFetched: 0,
     updatedCount: 0,
@@ -1216,37 +1180,23 @@ export async function pullFromJira(projectRoot, customConfig = {}, req = null) {
     clientFiles: [],
   };
 
-  const auth = isLive ? Buffer.from(`${config.email}:${config.apiToken}`).toString('base64') : '';
+  const auth = Buffer.from(`${config.email}:${config.apiToken}`).toString('base64');
 
   // 1. Fetch tickets from JIRA
   let jiraIssues = [];
-  if (isLive) {
-    try {
-      jiraIssues = await fetchJiraIssues(config, { throwOnError: true });
-    } catch (err) {
-      return {
-        success: false,
-        error: err.message || 'Failed to fetch issues from JIRA. Check project key, API token, and JQL search access.',
-      };
-    }
-    if (jiraIssues.length === 0) {
-      return {
-        success: false,
-        error: `No issues returned for JIRA project ${projectKey}. Push story specs first or confirm the project key in Configure Connection.`,
-      };
-    }
-  } else {
-    // Sandbox simulated pull
-    jiraIssues = localData.stories.map((st, i) => ({
-      key: mapping.stories[st.storyId] || `${projectKey}-${110 + i}`,
-      fields: {
-        summary: `[Story ${st.storyId}] ${st.title}`,
-        issuetype: { name: 'Story' },
-        description:
-          `h3. User Story\n${st.userStory || st.title}\n\nh3. Acceptance Criteria Checklist\n` +
-          st.criteria.map((c) => `* [${c.checked ? 'X' : ' '}] ${c.text}`).join('\n'),
-      },
-    }));
+  try {
+    jiraIssues = await fetchJiraIssues(config, { throwOnError: true });
+  } catch (err) {
+    return {
+      success: false,
+      error: err.message || 'Failed to fetch issues from JIRA. Check project key, API token, and JQL search access.',
+    };
+  }
+  if (jiraIssues.length === 0) {
+    return {
+      success: false,
+      error: `No issues returned for JIRA project ${projectKey}. Push story specs first or confirm the project key in Configure Connection.`,
+    };
   }
 
   pullResults.totalFetched = jiraIssues.length;
@@ -1953,18 +1903,14 @@ export async function syncToConfluence(projectRoot, customConfig = {}, req = nul
   const deliverables = filterConfluencePhaseDeliverables(rawDeliverables);
   if (!mapping.confluence) mapping.confluence = {};
 
-  const isLive = Boolean(config.domain && config.email && config.apiToken && !config.isDemoMode);
+  const isLive = hasLiveAtlassianCredentials(config);
   const domain = normalizeAtlassianDomain(config.domain);
   const spaceKey = (config.confluenceSpaceKey || 'DOCS').toUpperCase();
 
-  if (isLive && (!config.domain || !config.email || !config.apiToken)) {
-    return {
-      success: false,
-      error:
-        'Atlassian credentials were not received by the server. Open Configure Connection, save again, then retry sync.',
-    };
+  if (!isLive) {
+    return { success: false, error: ATLASSIAN_LIVE_REQUIRED_MSG };
   }
-  if (isLive && deliverables.length === 0) {
+  if (deliverables.length === 0) {
     return {
       success: false,
       error:
@@ -1974,7 +1920,7 @@ export async function syncToConfluence(projectRoot, customConfig = {}, req = nul
   }
 
   const syncResults = {
-    mode: isLive ? 'live-cloud' : 'simulated-demo',
+    mode: 'live-cloud',
     domain,
     spaceKey,
     totalPages: deliverables.length,
@@ -2139,23 +2085,6 @@ export async function syncToConfluence(projectRoot, customConfig = {}, req = nul
         continue;
       }
     }
-
-    if (!isLive) {
-      // Demo/Simulated Page
-      const isUpdate = Boolean(mapping.confluence[doc.filename]);
-      const demoId = mappedPageId || String(pageId);
-      mapping.confluence[doc.filename] = demoId;
-      if (isUpdate) syncResults.updatedCount++;
-      else syncResults.createdCount++;
-
-      syncResults.pages.push({
-        title: pageTitle,
-        type: doc.type,
-        pageId: demoId,
-        status: isUpdate ? 'Updated (Confluence Sandbox)' : 'Published (Confluence Sandbox)',
-        url: `${domain}/wiki/spaces/${spaceKey}/pages/${demoId}`,
-      });
-    }
   }
 
   saveAtlassianMapping(projectRoot, mapping);
@@ -2207,20 +2136,16 @@ export async function pullFromConfluence(projectRoot, customConfig = {}, req = n
     useWorkspace ? discoverDeliverablesFromWorkspace(workspaceFiles, mapping) : discoverDeliverables(projectRoot),
   );
 
-  const isLive = Boolean(config.domain && config.email && config.apiToken && !config.isDemoMode);
+  const isLive = hasLiveAtlassianCredentials(config);
   const domain = normalizeAtlassianDomain(config.domain);
   const spaceKey = (config.confluenceSpaceKey || 'DOCS').toUpperCase();
 
-  if (isLive && (!config.domain || !config.email || !config.apiToken)) {
-    return {
-      success: false,
-      error:
-        'Atlassian credentials were not received by the server. Open Configure Connection, save again, then retry pull.',
-    };
+  if (!isLive) {
+    return { success: false, error: ATLASSIAN_LIVE_REQUIRED_MSG };
   }
 
   const pullResults = {
-    mode: isLive ? 'live-cloud' : 'simulated-demo',
+    mode: 'live-cloud',
     spaceKey,
     totalFetched: 0,
     updatedCount: 0,
@@ -2230,60 +2155,47 @@ export async function pullFromConfluence(projectRoot, customConfig = {}, req = n
     clientFiles: [],
   };
 
-  const auth = isLive ? Buffer.from(`${config.email}:${config.apiToken}`).toString('base64') : '';
+  const auth = Buffer.from(`${config.email}:${config.apiToken}`).toString('base64');
 
   let confluencePages = [];
-  if (isLive) {
-    try {
-      const pageLimit = 50;
-      let start = 0;
-      for (;;) {
-        const listUrl =
-          `${domain}/wiki/rest/api/content?spaceKey=${encodeURIComponent(spaceKey)}` +
-          `&expand=body.storage,version,history&limit=${pageLimit}&start=${start}`;
-        const res = await fetch(listUrl, {
-          headers: {
-            Authorization: `Basic ${auth}`,
-            Accept: 'application/json',
-          },
-          signal: AbortSignal.timeout(45_000),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          const msg =
-            (Array.isArray(data.message) ? data.message.join('; ') : data.message) ||
-            `Confluence list failed (HTTP ${res.status})`;
-          return { success: false, error: msg };
-        }
-        const batch = data.results || [];
-        confluencePages.push(...batch);
-        if (batch.length < pageLimit) break;
-        start += batch.length;
-        if (start > 500) break;
+  try {
+    const pageLimit = 50;
+    let start = 0;
+    for (;;) {
+      const listUrl =
+        `${domain}/wiki/rest/api/content?spaceKey=${encodeURIComponent(spaceKey)}` +
+        `&expand=body.storage,version,history&limit=${pageLimit}&start=${start}`;
+      const res = await fetch(listUrl, {
+        headers: {
+          Authorization: `Basic ${auth}`,
+          Accept: 'application/json',
+        },
+        signal: AbortSignal.timeout(45_000),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg =
+          (Array.isArray(data.message) ? data.message.join('; ') : data.message) ||
+          `Confluence list failed (HTTP ${res.status})`;
+        return { success: false, error: msg };
       }
-      if (confluencePages.length === 0) {
-        return {
-          success: false,
-          error: `No pages found in Confluence space ${spaceKey}. Push deliverables first or verify the space key.`,
-        };
-      }
-    } catch (err) {
+      const batch = data.results || [];
+      confluencePages.push(...batch);
+      if (batch.length < pageLimit) break;
+      start += batch.length;
+      if (start > 500) break;
+    }
+    if (confluencePages.length === 0) {
       return {
         success: false,
-        error: err.message || 'Failed to fetch pages from Confluence.',
+        error: `No pages found in Confluence space ${spaceKey}. Push deliverables first or verify the space key.`,
       };
     }
-  } else {
-    confluencePages = localDeliverables.map((d, i) => ({
-      id: String(100_234 + i),
-      title: `${d.title} (${path.basename(projectRoot)})`,
-      body: {
-        storage: {
-          value: `<pre>${escapeHtml(d.content)}</pre>`,
-        },
-      },
-      version: { number: 1 },
-    }));
+  } catch (err) {
+    return {
+      success: false,
+      error: err.message || 'Failed to fetch pages from Confluence.',
+    };
   }
 
   pullResults.totalFetched = confluencePages.length;
