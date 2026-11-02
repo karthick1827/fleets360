@@ -1,6 +1,25 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
   "cleanUrls": true,
+  "headers": [
+    {
+      "source": "/markdown/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    }
+  ],
+  "functions": {
+    "api/**/*.js": {
+      "includeFiles": "{tools/**,_acl/**,_acl-output/**}",
+      "maxDuration": 60
+    }
+  },
   "rewrites": [
     {
       "source": "/api/atlassian/config",

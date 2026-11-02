@@ -207,9 +207,7 @@ async function fetchGithubContext(owner, repo, branch, ghHeaders) {
       headers: ghHeaders,
     });
     if (repoRes.status === 404) {
-      if (ghHeaders.Authorization) {
-        repoDeleted = true;
-      }
+      repoDeleted = true;
     } else if (repoRes.ok) {
       ghRepoData = await repoRes.json();
       if (ghRepoData.pushed_at) {
@@ -277,7 +275,7 @@ function disconnectedPayload({ remoteOrigin, repoDeleted, repoName, projectRoot 
       projectName: repoName || path.basename(projectRoot),
       userRole: '',
       projectStatus: repoDeleted ? 'Remote repository was deleted on GitHub' : 'No repository connected to GitHub',
-      linkedRepositories: remoteOrigin ? [remoteOrigin] : [],
+      linkedRepositories: repoDeleted ? [] : remoteOrigin ? [remoteOrigin.replace(/\.git$/i, '')] : [],
       assignedDate: '',
     },
     gitDetails: {
@@ -372,12 +370,16 @@ export async function getGitDetails(projectRoot, options = {}) {
     return disconnectedPayload({ remoteOrigin, repoDeleted, repoName, projectRoot });
   }
 
-  if (repoDeleted && !gh.ghRepoData && !ghHeaders.Authorization) {
-    repoDeleted = false;
-  }
+  const repoExistsOnGithub = Boolean(gh.ghRepoData);
+  const localRemoteLive = Boolean(local.remoteOrigin && !local.repoDeleted);
 
-  if (repoDeleted && !gh.ghRepoData) {
-    return disconnectedPayload({ remoteOrigin, repoDeleted, repoName, projectRoot });
+  if (repoDeleted || (!repoExistsOnGithub && !localRemoteLive)) {
+    return disconnectedPayload({
+      remoteOrigin,
+      repoDeleted: Boolean(repoDeleted || remoteOrigin),
+      repoName,
+      projectRoot,
+    });
   }
 
   const ghUserData = gh.ghUserData;

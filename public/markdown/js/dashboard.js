@@ -1484,6 +1484,12 @@ function writeGithubRepoConfig(cfg) {
 
 function hydrateGithubRepoFromGitDetails(data) {
   if (!data) return;
+  const disconnected = data.repoConnected !== true || data.repoDeleted === true;
+  if (disconnected) {
+    writeGithubRepoConfig({ owner: '', repo: '', branch: 'main' });
+    window.__ACL_GITHUB_REPO__ = { owner: '', repo: '', branch: 'main' };
+    return;
+  }
   const next = readGithubRepoConfig();
   if (data.githubOwner) next.owner = data.githubOwner;
   if (data.githubRepo) next.repo = data.githubRepo;
@@ -1814,7 +1820,7 @@ if (typeof window !== 'undefined') {
 }
 
 // Safe JSON Fetch Helper (Resilient against HTML error pages or empty response bodies)
-const ATLASSIAN_UI_BUILD = '35-live-only';
+const ATLASSIAN_UI_BUILD = '36-live-only';
 
 function migrateAtlassianClientStorage() {
   try {

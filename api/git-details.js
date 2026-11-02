@@ -31,7 +31,7 @@ export default async function handler(req, res) {
       headers: req.headers || {},
     });
 
-    res.writeHead(200, corsHeaders);
+    res.writeHead(200, { ...corsHeaders, 'Cache-Control': 'no-store' });
     res.end(JSON.stringify(payload));
   } catch (err) {
     res.writeHead(500, corsHeaders);

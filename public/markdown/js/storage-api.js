@@ -650,6 +650,13 @@ async function ensureLinkedGitHubRepo() {
     const res = await fetch('/api/git-details?t=' + Date.now(), { cache: 'no-store' });
     if (!res.ok) return;
     const data = await res.json();
+    if (data.repoConnected !== true || data.repoDeleted === true) {
+      localStorage.removeItem('acl_github_owner');
+      localStorage.removeItem('acl_github_repo');
+      localStorage.removeItem('acl_github_branch');
+      window.__ACL_GITHUB_REPO__ = { owner: '', repo: '', branch: 'main' };
+      return;
+    }
     if (data.githubOwner) {
       owner = data.githubOwner;
       localStorage.setItem('acl_github_owner', owner);
