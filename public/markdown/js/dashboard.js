@@ -1643,6 +1643,9 @@ async function renderGitDashboard() {
           .join('')
       : '<span class="empty">—</span>';
 
+    const atlCfg = readAtlassianClientConfig();
+    const atlLinked = isAtlassianConfigConnected(atlCfg);
+
     container.innerHTML = `
       <div class="git-dashboard-wrapper">
         <!-- Top App Title Card -->
@@ -1678,8 +1681,8 @@ async function renderGitDashboard() {
             </div>
             <div class="git-integrations-bar">
               <span>Linked Workspaces:</span>
-              <span class="git-int-pill">${isConnected && hasEmail ? '✅ Atlassian JIRA (Linked)' : '⚪ JIRA (Unlinked)'}</span>
-              <span class="git-int-pill">${isConnected && hasEmail ? '✅ Confluence (Linked)' : '⚪ Confluence (Unlinked)'}</span>
+              <span class="git-int-pill">${atlLinked ? '✅ Atlassian JIRA (Linked)' : '⚪ JIRA (Unlinked)'}</span>
+              <span class="git-int-pill">${atlLinked ? '✅ Confluence (Linked)' : '⚪ Confluence (Unlinked)'}</span>
               <span class="git-int-pill">${isConnected ? '🔒 Read-Only Identity' : '⚪ Disconnected'}</span>
             </div>
           </div>
@@ -1814,10 +1817,24 @@ if (typeof window !== 'undefined') {
 function readAtlassianClientConfig() {
   try {
     const raw = localStorage.getItem('__acl_atlassian_config__');
-    return raw ? JSON.parse(raw) : {};
+    return normalizeAtlassianClientConfig(raw ? JSON.parse(raw) : {});
   } catch {
     return {};
   }
+}
+
+/** Legacy configs had connected:true without verification — treat as not connected until Save & Connect succeeds. */
+function normalizeAtlassianClientConfig(cfg) {
+  if (!cfg || typeof cfg !== 'object') return {};
+  const out = { ...cfg };
+  if (out.isDemoMode) {
+    out.connected = out.connected !== false;
+    return out;
+  }
+  if (!out.verifiedAt || out.connected !== true) {
+    out.connected = false;
+  }
+  return out;
 }
 
 function normalizeAtlassianDomainClient(domain) {
@@ -1843,43 +1860,39 @@ function isAtlassianConfigUsable(cfg) {
 
 function isAtlassianConfigConnected(cfg) {
   if (!cfg || typeof cfg !== 'object') return false;
-  if (cfg.isDemoMode) return true;
+  if (cfg.isDemoMode) return cfg.connected === true;
   if (!isAtlassianConfigUsable(cfg)) return false;
-  return cfg.connected === true;
+  return cfg.connected === true && Boolean(cfg.verifiedAt);
 }
 
-/** Serverless GET /api/atlassian-config is often empty; browser localStorage holds credentials. */
+/** Browser localStorage owns connection state; server GET must not re-mark failed credentials as connected. */
 function mergeAtlassianConfig(serverCfg, localCfg) {
   const server = serverCfg && typeof serverCfg === 'object' ? serverCfg : {};
-  const local = localCfg && typeof localCfg === 'object' ? localCfg : {};
+  const local = normalizeAtlassianClientConfig(localCfg && typeof localCfg === 'object' ? localCfg : {});
   const merged = {
     ...server,
     ...local,
     apiToken: local.apiToken || server.apiToken || '',
     jiraProjectKey: local.jiraProjectKey || server.jiraProjectKey || '',
     confluenceSpaceKey: local.confluenceSpaceKey || server.confluenceSpaceKey || '',
+    verifiedAt: local.verifiedAt || null,
   };
 
-  if (local.connected === false) {
-    merged.connected = false;
-    merged.lastError = local.lastError || server.lastError || merged.lastError;
+  if (local.isDemoMode) {
+    merged.connected = local.connected === true;
+    merged.isDemoMode = true;
     return merged;
   }
-  if (server.connected === false) {
-    merged.connected = false;
-    merged.lastError = server.lastError || local.lastError || merged.lastError;
-    return merged;
-  }
-  if (server.connected === true) {
+
+  if (local.connected === true && local.verifiedAt) {
     merged.connected = true;
     merged.lastError = null;
     return merged;
   }
-  if (local.connected === true) {
-    merged.connected = true;
-    return merged;
-  }
+
   merged.connected = false;
+  merged.verifiedAt = null;
+  merged.lastError = local.lastError || server.lastError || merged.lastError || '';
   return merged;
 }
 
@@ -2235,7 +2248,7 @@ async function renderAtlassianSuite(isPushed) {
     let statusBadgeHtml = '';
     if (isConnected && !isDemo) {
       statusBadgeHtml = `<span class="atlassian-status-badge connected">🟢 Connected: ${cfgRes.domain || 'Cloud'}</span>`;
-    } else if (isDemo) {
+    } else if (isDemo && cfgRes.connected === true) {
       statusBadgeHtml = `<span class="atlassian-status-badge demo">🟡 Interactive Sandbox Mode</span>`;
     } else {
       statusBadgeHtml = `<span class="atlassian-status-badge standby">⚪ Not Connected${
@@ -2474,7 +2487,15 @@ window.saveAtlassianConfig = async function (e) {
     jiraProjectKey: jiraProjectKey || '',
     confluenceSpaceKey: confluenceSpaceKey || '',
     isDemoMode,
-    connected: true,
+  };
+
+  const failLocalConfig = (errMsg) => {
+    writeAtlassianClientConfig({
+      ...payload,
+      connected: false,
+      verifiedAt: null,
+      lastError: errMsg || 'Verification failed',
+    });
   };
 
   const saveBtn = document.querySelector('#atlassianConfigForm button[type="submit"]') || (e && e.target);
@@ -2496,15 +2517,18 @@ window.saveAtlassianConfig = async function (e) {
         ...res.data.config,
         apiToken: res.data.config.apiToken || apiToken || '',
         connected: true,
+        verifiedAt: isDemoMode ? 'demo' : new Date().toISOString(),
+        lastError: null,
       };
       writeAtlassianClientConfig(saved);
       alert('✅ Atlassian credentials verified and workspace keys saved successfully!');
       renderAtlassianSuite(true);
     } else if ((res.status === 404 || res.status === 0) && isAtlassianConfigUsable(payload)) {
-      const localOnly = { ...payload, connected: true, clientPersisted: true };
-      writeAtlassianClientConfig(localOnly);
+      failLocalConfig('Server verification unavailable (HTTP ' + res.status + '). Fix API route and use Save & Connect again.');
       alert(
-        '✅ Credentials saved in this browser. Server verify was unavailable; sync will still use your saved settings.',
+        '⚠️ Could not verify credentials on the server (HTTP ' +
+          res.status +
+          '). Status remains Not Connected until verification succeeds.',
       );
       renderAtlassianSuite(true);
     } else {
@@ -2513,16 +2537,12 @@ window.saveAtlassianConfig = async function (e) {
         errMsg =
           'API route not found (HTTP 404). On Vercel, confirm Root Directory is the repo root (not dist/), redeploy, and check Deployment → Serverless Functions lists /api/atlassian-config.';
       }
-      writeAtlassianClientConfig({
-        ...payload,
-        connected: false,
-        lastError: errMsg,
-      });
+      failLocalConfig(errMsg);
       alert('⚠️ Error saving configuration: ' + errMsg);
       renderAtlassianSuite(true);
     }
   } catch (err) {
-    writeAtlassianClientConfig({ ...payload, connected: false, lastError: err.message });
+    failLocalConfig(err.message);
     alert('⚠️ Failed to save Atlassian configuration: ' + err.message);
     renderAtlassianSuite(true);
   } finally {
