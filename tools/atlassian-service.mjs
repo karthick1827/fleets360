@@ -105,7 +105,29 @@ export function getAtlassianConfig(projectRoot) {
   if (fs.existsSync(configPath)) {
     try {
       const parsed = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      const hasRealCredentials = Boolean(parsed.domain && parsed.email);
+      const hadLegacyDemo = Boolean(parsed.isDemoMode);
+      if (hadLegacyDemo) {
+        delete parsed.isDemoMode;
+        parsed.connected = false;
+        parsed.verifiedAt = null;
+        parsed.lastError = parsed.lastError || 'Sandbox mode removed; use Save & Connect with live credentials.';
+        try {
+          safeWriteAclJson(projectRoot, 'atlassian-config.json', {
+            domain: parsed.domain || '',
+            email: parsed.email || '',
+            apiToken: parsed.apiToken || '',
+            jiraProjectKey: parsed.jiraProjectKey || defaultProjectKey,
+            confluenceSpaceKey: parsed.confluenceSpaceKey || defaultProjectKey,
+            connected: false,
+            verifiedAt: null,
+            lastSynced: parsed.lastSynced || null,
+            lastError: parsed.lastError,
+          });
+        } catch {
+          // ignore migration write errors
+        }
+      }
+      const hasRealCredentials = Boolean(parsed.domain && parsed.email && parsed.apiToken);
       const isConnected = Boolean(parsed.connected && parsed.verifiedAt && hasRealCredentials);
       return {
         domain: parsed.domain || '',
@@ -114,7 +136,9 @@ export function getAtlassianConfig(projectRoot) {
         jiraProjectKey: parsed.jiraProjectKey || defaultProjectKey,
         confluenceSpaceKey: parsed.confluenceSpaceKey || defaultProjectKey,
         connected: isConnected,
+        verifiedAt: isConnected ? parsed.verifiedAt : null,
         lastSynced: parsed.lastSynced || null,
+        lastError: parsed.lastError || null,
       };
     } catch {
       // fallback
@@ -787,10 +811,19 @@ async function resolveWorkspace(projectRoot, customConfig = {}, req = null) {
 }
 
 function persistAtlassianSession(projectRoot, config) {
+  const hasLive = hasLiveAtlassianCredentials(config);
+  const verifiedAt = config.verifiedAt || null;
+  const connected = Boolean(hasLive && verifiedAt && config.connected !== false);
   const snapshot = {
-    ...config,
-    connected: Boolean(config.connected),
+    domain: normalizeAtlassianDomain(config.domain) || config.domain || '',
+    email: config.email || '',
+    apiToken: config.apiToken || '',
+    jiraProjectKey: config.jiraProjectKey || '',
+    confluenceSpaceKey: config.confluenceSpaceKey || '',
+    connected,
+    verifiedAt: connected ? verifiedAt : null,
     lastSynced: new Date().toISOString(),
+    lastError: config.lastError || null,
   };
   try {
     safeWriteAclJson(projectRoot, 'atlassian-config.json', snapshot);

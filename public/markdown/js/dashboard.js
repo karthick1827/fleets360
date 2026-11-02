@@ -1814,7 +1814,23 @@ if (typeof window !== 'undefined') {
 }
 
 // Safe JSON Fetch Helper (Resilient against HTML error pages or empty response bodies)
+const ATLASSIAN_UI_BUILD = '35-live-only';
+
+function migrateAtlassianClientStorage() {
+  try {
+    const raw = localStorage.getItem('__acl_atlassian_config__');
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.isDemoMode) {
+      localStorage.removeItem('__acl_atlassian_config__');
+    }
+  } catch {
+    localStorage.removeItem('__acl_atlassian_config__');
+  }
+}
+
 function readAtlassianClientConfig() {
+  migrateAtlassianClientStorage();
   try {
     const raw = localStorage.getItem('__acl_atlassian_config__');
     return normalizeAtlassianClientConfig(raw ? JSON.parse(raw) : {});
@@ -2255,7 +2271,7 @@ async function renderAtlassianSuite(isPushed) {
         <div class="atlassian-config-box" id="atlassianConfigPanel" style="display: none;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <strong style="color: #0f172a; font-size: 0.95rem;">Atlassian Cloud Credentials & Workspace Keys</strong>
-            <span style="font-size: 0.78rem; color: #64748b;">Credentials saved in this browser; on Vercel, the server only verifies (no repo write).</span>
+            <span style="font-size: 0.78rem; color: #64748b;">Credentials saved in this browser; on Vercel, the server only verifies (no repo write). · UI ${ATLASSIAN_UI_BUILD}</span>
           </div>
           ${
             cfgRes.lastError
